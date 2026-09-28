@@ -4,9 +4,9 @@
 
 [build]
   # Use the main web app build output (NOT showcase)
-  # Cache buster: 2026-09-27-web-app-deployment
+  # Force config refresh: changing build command format
   base = "."
-  command = "turbo run build --filter @folkcare/web"
+  command = "npm run build --workspace=@folkcare/web"
   publish = "packages/web/dist"
 
 [build.environment]
