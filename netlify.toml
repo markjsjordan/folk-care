@@ -3,10 +3,10 @@
 # Triggers on pushes to production branch
 
 [build]
-  # Use the showcase build output
-  base = "showcase"
-  command = "npm run build --workspace=showcase"
-  publish = "showcase/dist"
+  # Use the main web app build output
+  base = "."
+  command = "turbo run build --filter @folkcare/web"
+  publish = "packages/web/dist"
 
 [build.environment]
   # Build environment variables
