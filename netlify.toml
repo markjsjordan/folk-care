@@ -1,5 +1,6 @@
 # Netlify deployment configuration
 # Deploys the Folk Care Showcase static site to Netlify
+# Triggers on pushes to production branch
 
 [build]
   # Use the showcase build output
