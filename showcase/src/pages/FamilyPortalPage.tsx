@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { 
-  Users, 
-  MessageCircle, 
-  Calendar, 
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import {
+  Users,
+  MessageCircle,
+  Calendar,
   Heart,
   Send,
   Clock,
@@ -16,6 +16,15 @@ import {
   Activity,
   ClipboardList,
   User,
+  ThumbsUp,
+  ThumbsDown,
+  Smile,
+  Sun,
+  CloudRain,
+  AlertTriangle,
+  Sparkles,
+  Printer,
+  ZoomIn,
 } from 'lucide-react';
 
 // Mock data
@@ -88,12 +97,234 @@ const notifications = [
   { id: 3, type: 'message', message: 'New message from Care Coordinator', time: '3 hours ago' },
 ];
 
+// Recent visits awaiting feedback
+const recentVisitsForFeedback = [
+  {
+    id: 1,
+    caregiver: 'Sarah M.',
+    avatar: 'SM',
+    type: 'Personal Care',
+    date: 'Yesterday',
+    time: '2:00 PM - 4:00 PM',
+    feedback: null as 'positive' | 'negative' | null,
+  },
+  {
+    id: 2,
+    caregiver: 'Maria G.',
+    avatar: 'MG',
+    type: 'Skilled Nursing',
+    date: 'Nov 2',
+    time: '10:00 AM - 11:00 AM',
+    feedback: null as 'positive' | 'negative' | null,
+  },
+];
+
+// Wellness check-in history with relative dates (won't become stale)
+const wellnessHistory = [
+  { date: 'Yesterday', status: 'great' as const, note: '' },
+  { date: '2 days ago', status: 'good' as const, note: '' },
+  { date: '3 days ago', status: 'good' as const, note: 'Felt a bit tired' },
+  { date: '4 days ago', status: 'okay' as const, note: 'Had some trouble sleeping' },
+  { date: '5 days ago', status: 'great' as const, note: '' },
+];
+
+type WellnessStatus = 'great' | 'good' | 'okay' | 'need-help';
+
+// Wellness status configuration - extracted for performance and type safety
+const WELLNESS_STATUS_CONFIG: Record<WellnessStatus, { icon: typeof Sparkles; color: string; bg: string; label: string }> = {
+  great: { icon: Sparkles, color: 'text-green-600', bg: 'bg-green-100', label: 'Great' },
+  good: { icon: Sun, color: 'text-blue-600', bg: 'bg-blue-100', label: 'Good' },
+  okay: { icon: CloudRain, color: 'text-yellow-600', bg: 'bg-yellow-100', label: 'Okay' },
+  'need-help': { icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-100', label: 'Need Help' },
+};
+
 export const FamilyPortalPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'messages' | 'schedule' | 'careplan'>('overview');
   const [messageText, setMessageText] = useState('');
+  const [visitFeedback, setVisitFeedback] = useState<Record<number, { rating: 'positive' | 'negative'; submitted: boolean }>>({});
+  const [feedbackComment, setFeedbackComment] = useState<Record<number, string>>({});
+  const [showThankYou, setShowThankYou] = useState<number | null>(null);
+  const thankYouTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Wellness check-in state
+  const [todayCheckin, setTodayCheckin] = useState<WellnessStatus | null>(null);
+  const [checkinNote, setCheckinNote] = useState('');
+  const [checkinSubmitted, setCheckinSubmitted] = useState(false);
+  const [showCheckinHistory, setShowCheckinHistory] = useState(false);
 
   const completedTasks = carePlanTasks.filter(t => t.completed).length;
   const totalTasks = carePlanTasks.length;
+
+  // Memoize pending feedback count to avoid recalculating on every render
+  const pendingFeedbackCount = useMemo(
+    () => recentVisitsForFeedback.filter(v => !visitFeedback[v.id]?.submitted).length,
+    [visitFeedback]
+  );
+
+  // Cleanup timeout on unmount to prevent memory leak
+  useEffect(() => {
+    return () => {
+      if (thankYouTimeoutRef.current) {
+        clearTimeout(thankYouTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleFeedback = (visitId: number, rating: 'positive' | 'negative') => {
+    setVisitFeedback(prev => ({
+      ...prev,
+      [visitId]: { rating, submitted: false }
+    }));
+  };
+
+  const submitFeedback = (visitId: number) => {
+    setVisitFeedback(prev => ({
+      ...prev,
+      [visitId]: { ...prev[visitId], submitted: true }
+    }));
+    setShowThankYou(visitId);
+    // Clear any existing timeout before setting a new one
+    if (thankYouTimeoutRef.current) {
+      clearTimeout(thankYouTimeoutRef.current);
+    }
+    thankYouTimeoutRef.current = setTimeout(() => setShowThankYou(null), 3000);
+  };
+
+  const submitWellnessCheckin = () => {
+    if (todayCheckin) {
+      setCheckinSubmitted(true);
+      // Persist to localStorage for demo consistency
+      const today = new Date().toDateString();
+      localStorage.setItem('folkcare_wellness_checkin', JSON.stringify({
+        date: today,
+        status: todayCheckin,
+        note: checkinNote,
+      }));
+    }
+  };
+
+  // Load persisted wellness check-in on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('folkcare_wellness_checkin');
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        const today = new Date().toDateString();
+        // Only restore if check-in is from today
+        if (data.date === today) {
+          setTodayCheckin(data.status);
+          setCheckinNote(data.note || '');
+          setCheckinSubmitted(true);
+        }
+      } catch {
+        // Invalid data, ignore
+      }
+    }
+  }, []);
+
+  // Helper to get wellness config (uses extracted constant)
+  const getWellnessStatusConfig = (status: WellnessStatus) => WELLNESS_STATUS_CONFIG[status];
+
+  // HTML escape function to prevent XSS when building HTML strings
+  const escapeHtml = (text: string): string => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  };
+
+  // Print large print version of care plan and schedule
+  const handlePrintLarge = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      // Popup was blocked - notify user
+      alert('Unable to open print window. Please allow popups for this site and try again.');
+      return;
+    }
+
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Care Plan - Large Print</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              font-size: 24px;
+              line-height: 1.8;
+              padding: 40px;
+              max-width: 800px;
+              margin: 0 auto;
+            }
+            h1 { font-size: 36px; margin-bottom: 20px; }
+            h2 { font-size: 30px; margin-top: 40px; margin-bottom: 16px; border-bottom: 3px solid #333; padding-bottom: 8px; }
+            .section { margin-bottom: 40px; }
+            .task { padding: 16px 0; border-bottom: 2px solid #eee; }
+            .task-time { font-weight: bold; color: #333; }
+            .task-name { margin-left: 20px; }
+            .completed { color: #059669; }
+            .pending { color: #dc2626; }
+            .visit { padding: 20px 0; border-bottom: 2px solid #eee; }
+            .visit-caregiver { font-weight: bold; font-size: 28px; }
+            .visit-details { color: #555; margin-top: 8px; }
+            .header-info { background: #f3f4f6; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+            .print-note { font-size: 16px; color: #666; margin-top: 40px; border-top: 2px solid #eee; padding-top: 20px; }
+            @media print {
+              body { padding: 20px; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header-info">
+            <h1>Dorothy Chen's Care Plan</h1>
+            <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          </div>
+
+          <div class="section">
+            <h2>Today's Care Tasks</h2>
+            ${carePlanTasks.map(task => `
+              <div class="task">
+                <span class="task-time">${escapeHtml(task.time)}</span>
+                <span class="task-name">${escapeHtml(task.task)}</span>
+                <span class="${task.completed ? 'completed' : 'pending'}">
+                  ${task.completed ? '✓ Completed' : '○ Pending'}
+                </span>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="section">
+            <h2>Upcoming Visits</h2>
+            ${upcomingVisits.map(visit => `
+              <div class="visit">
+                <div class="visit-caregiver">${escapeHtml(visit.caregiver)}</div>
+                <div class="visit-details">
+                  <strong>${escapeHtml(visit.type)}</strong><br>
+                  ${escapeHtml(visit.date)} • ${escapeHtml(visit.time)}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="section">
+            <h2>Emergency Contacts</h2>
+            <p><strong>Care Coordinator:</strong> Folk Care Agency - (555) 123-4567</p>
+            <p><strong>Emergency:</strong> 911</p>
+          </div>
+
+          <div class="print-note">
+            <p>This document was generated from Folk Care's Family Portal for accessibility purposes.</p>
+            <button class="no-print" onclick="window.print()" style="font-size: 20px; padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 16px;">
+              Print This Page
+            </button>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(content);
+    printWindow.document.close();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -228,6 +459,112 @@ export const FamilyPortalPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Visit Feedback Section */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6" data-tour="visit-feedback">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">How Was Your Visit?</h3>
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                    {pendingFeedbackCount} awaiting feedback
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Your feedback helps us ensure quality care. Just tap thumbs up or down!
+                </p>
+                <div className="space-y-4">
+                  {recentVisitsForFeedback.map((visit) => {
+                    const feedback = visitFeedback[visit.id];
+                    const isSubmitted = feedback?.submitted;
+                    const isThankYou = showThankYou === visit.id;
+
+                    if (isSubmitted && !isThankYou) return null;
+
+                    return (
+                      <div key={visit.id} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                        {isThankYou ? (
+                          <div className="flex items-center justify-center gap-2 py-4 text-green-600">
+                            <Smile className="w-6 h-6" />
+                            <span className="font-medium">Thank you for your feedback!</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="bg-blue-100 text-blue-700 w-10 h-10 rounded-full flex items-center justify-center font-medium text-sm">
+                                {visit.avatar}
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-900">{visit.caregiver}</p>
+                                <p className="text-sm text-gray-600">{visit.type} • {visit.date}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3" role="group" aria-label="Rate this visit">
+                              <button
+                                onClick={() => handleFeedback(visit.id, 'positive')}
+                                aria-label={`Rate visit with ${visit.caregiver} as great`}
+                                aria-pressed={feedback?.rating === 'positive'}
+                                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg border-2 transition-all ${
+                                  feedback?.rating === 'positive'
+                                    ? 'bg-green-50 border-green-500 text-green-700'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:border-green-300 hover:bg-green-50'
+                                }`}
+                              >
+                                <ThumbsUp className={`w-5 h-5 ${feedback?.rating === 'positive' ? 'fill-green-500' : ''}`} />
+                                <span className="font-medium">Great!</span>
+                              </button>
+                              <button
+                                onClick={() => handleFeedback(visit.id, 'negative')}
+                                aria-label={`Rate visit with ${visit.caregiver} as could be better`}
+                                aria-pressed={feedback?.rating === 'negative'}
+                                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg border-2 transition-all ${
+                                  feedback?.rating === 'negative'
+                                    ? 'bg-red-50 border-red-500 text-red-700'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:border-red-300 hover:bg-red-50'
+                                }`}
+                              >
+                                <ThumbsDown className={`w-5 h-5 ${feedback?.rating === 'negative' ? 'fill-red-500' : ''}`} />
+                                <span className="font-medium">Could be better</span>
+                              </button>
+                            </div>
+
+                            {feedback?.rating && (
+                              <div className="mt-3 space-y-2">
+                                <textarea
+                                  placeholder={feedback.rating === 'positive'
+                                    ? "What did you appreciate? (optional)"
+                                    : "What could be improved? (optional)"
+                                  }
+                                  value={feedbackComment[visit.id] || ''}
+                                  onChange={(e) => setFeedbackComment(prev => ({
+                                    ...prev,
+                                    [visit.id]: e.target.value
+                                  }))}
+                                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                  rows={2}
+                                />
+                                <button
+                                  onClick={() => submitFeedback(visit.id)}
+                                  className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                                >
+                                  Submit Feedback
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {recentVisitsForFeedback.every(v => visitFeedback[v.id]?.submitted) && !showThankYou && (
+                    <div className="text-center py-6 text-gray-500">
+                      <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                      <p className="font-medium">All caught up!</p>
+                      <p className="text-sm">No visits awaiting feedback</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Today's Care Plan Progress */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6" data-tour="care-plan">
                 <div className="flex items-center justify-between mb-4">
@@ -296,6 +633,106 @@ export const FamilyPortalPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Daily Wellness Check-in */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6" data-tour="wellness-checkin">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Daily Check-in</h3>
+                  {!checkinSubmitted && (
+                    <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
+                      Today
+                    </span>
+                  )}
+                </div>
+
+                {checkinSubmitted ? (
+                  <div className="text-center py-4">
+                    <div className="inline-flex items-center justify-center w-12 h-12 bg-green-100 rounded-full mb-3">
+                      <CheckCircle className="w-6 h-6 text-green-600" />
+                    </div>
+                    <p className="font-medium text-gray-900">Check-in Complete!</p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      You reported feeling {todayCheckin && getWellnessStatusConfig(todayCheckin)?.label.toLowerCase()}
+                    </p>
+                    <button
+                      onClick={() => setShowCheckinHistory(!showCheckinHistory)}
+                      className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      {showCheckinHistory ? 'Hide history' : 'View history'}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-600 mb-4">How is Dorothy feeling today?</p>
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                      {(['great', 'good', 'okay', 'need-help'] as WellnessStatus[]).map((status) => {
+                        const config = getWellnessStatusConfig(status);
+                        const Icon = config.icon;
+                        return (
+                          <button
+                            key={status}
+                            onClick={() => setTodayCheckin(status)}
+                            aria-label={`Rate wellness as ${config.label}`}
+                            aria-pressed={todayCheckin === status}
+                            className={`flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all ${
+                              todayCheckin === status
+                                ? `${config.bg} border-current ${config.color}`
+                                : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                            }`}
+                          >
+                            <Icon className="w-5 h-5" />
+                            <span className="text-xs font-medium">{config.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {todayCheckin && (
+                      <div className="space-y-3">
+                        <textarea
+                          placeholder="Any notes? (optional)"
+                          value={checkinNote}
+                          onChange={(e) => setCheckinNote(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                          rows={2}
+                        />
+                        <button
+                          onClick={submitWellnessCheckin}
+                          className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
+                            todayCheckin === 'need-help'
+                              ? 'bg-red-600 text-white hover:bg-red-700'
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                        >
+                          {todayCheckin === 'need-help' ? 'Submit & Alert Care Team' : 'Submit Check-in'}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Check-in History */}
+                {showCheckinHistory && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <h4 className="text-sm font-medium text-gray-900 mb-3">Recent Check-ins</h4>
+                    <div className="space-y-2">
+                      {wellnessHistory.slice(0, 5).map((entry, index) => {
+                        const config = getWellnessStatusConfig(entry.status);
+                        const Icon = config.icon;
+                        return (
+                          <div key={index} className="flex items-center gap-3 text-sm">
+                            <div className={`p-1.5 rounded-full ${config.bg}`}>
+                              <Icon className={`w-3 h-3 ${config.color}`} />
+                            </div>
+                            <span className="text-gray-600 flex-1">{entry.date}</span>
+                            <span className={`font-medium ${config.color}`}>{config.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Quick Actions */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6" data-tour="messaging">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
@@ -315,6 +752,18 @@ export const FamilyPortalPage: React.FC = () => {
                   <button className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <Phone className="w-5 h-5 text-red-600" />
                     <span className="text-sm font-medium text-gray-900">Emergency Contact</span>
+                  </button>
+                  <button
+                    onClick={handlePrintLarge}
+                    aria-label="Print care plan in large format for better readability"
+                    className="w-full flex items-center gap-3 p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200"
+                  >
+                    <Printer className="w-5 h-5 text-blue-600" />
+                    <div className="text-left">
+                      <span className="text-sm font-medium text-gray-900">Print Large</span>
+                      <span className="block text-xs text-gray-500">Accessibility format</span>
+                    </div>
+                    <ZoomIn className="w-4 h-4 text-blue-400 ml-auto" />
                   </button>
                 </div>
               </div>
@@ -463,6 +912,33 @@ export const FamilyPortalPage: React.FC = () => {
               <div>
                 <h4 className="font-medium text-gray-900">Care Plan Visibility</h4>
                 <p className="text-sm text-gray-600">Track daily tasks and care progress</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="bg-yellow-100 p-2 rounded-lg">
+                <ThumbsUp className="w-5 h-5 text-yellow-600" />
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-900">Simple Feedback</h4>
+                <p className="text-sm text-gray-600">Quick thumbs up/down after each visit</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="bg-orange-100 p-2 rounded-lg">
+                <Sun className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-900">Wellness Check-ins</h4>
+                <p className="text-sm text-gray-600">Daily status updates with optional alerts</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="bg-indigo-100 p-2 rounded-lg">
+                <Printer className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-900">Large Print Export</h4>
+                <p className="text-sm text-gray-600">Accessible printouts for vision impaired</p>
               </div>
             </div>
           </div>

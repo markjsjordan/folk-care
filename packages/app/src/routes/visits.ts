@@ -5,9 +5,24 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { Database, isValidUUID, ComplianceAutopilotService } from '@folkcare/core';
+import { Database, isValidUUID, ComplianceAutopilotService, AuditService, UserContext } from '@folkcare/core';
 import { requireAuth } from '../middleware/auth-context.js';
-import { ScheduleRepository } from '@folkcare/scheduling-visits';
+import { ScheduleRepository, StaffingDemandPredictionService, CaregiverMatchingService } from '@folkcare/scheduling-visits';
+import { ComplianceCheckingService, complianceCheckRequestSchema, DocumentationQualityService, HospitalizationRiskService, VitalsAnomalyService, SentimentAnalysisService, ReportGenerationService } from '@folkcare/visit-notes';
+import { VisitDurationPredictionService } from '@folkcare/scheduling-visits';
+import knex from 'knex';
+
+/**
+ * Create a Knex instance for AI services that need it.
+ * Note: Consider adding a getKnex() function to @folkcare/core in the future.
+ */
+function getKnexInstance(): ReturnType<typeof knex> {
+  const connectionString = process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/folk-care-0';
+  return knex({
+    client: 'pg',
+    connection: connectionString,
+  });
+}
 
 /**
  * Validates date range parameters for calendar/list endpoints
@@ -1094,6 +1109,425 @@ export function createVisitRouter(db: Database): Router {
       });
     } catch (error) {
       next(error);
+    }
+  });
+
+// POST /visits/compliance-check
+  // Automated compliance checking for visits (AI-powered)
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- Sequential validation guards are inherently branchy
+  router.post('/compliance-check', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const knexDb = getKnexInstance();
+    const auditService = new AuditService(db);
+
+    try {
+      // Validate request body using Zod
+      const parseResult = complianceCheckRequestSchema.safeParse(req.body);
+      if (parseResult.success === false) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request parameters',
+          details: parseResult.error.issues,
+        });
+        return;
+      }
+
+      const { visitId, clientId, lookbackDays } = parseResult.data;
+
+      // Get user context for permission checking
+      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const user = req.user;
+
+      // Create user context for audit logging
+      const context: UserContext = {
+        userId: user.userId,
+        organizationId: user.organizationId ?? '',
+        roles: user.roles ?? [],
+        permissions: user.permissions ?? [],
+        branchIds: user.branchIds ?? [],
+      };
+
+      // Check that user has permission to read visits (required for compliance checking)
+      // The requireAuth middleware already ensures the user is authenticated
+      // Here we ensure they have proper organization context
+      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+      if (!context.organizationId) {
+        res.status(403).json({
+          success: false,
+          error: 'User must belong to an organization to perform compliance checks',
+        });
+        return;
+      }
+
+      // Run compliance check
+      const complianceService = new ComplianceCheckingService(knexDb);
+      const effectiveLookbackDays = lookbackDays ?? 7;
+      const result = await complianceService.checkCompliance({
+        visitId,
+        clientId,
+        lookbackDays: effectiveLookbackDays,
+      });
+
+      // Log audit event for HIPAA compliance
+      await auditService.logEvent(context, {
+        eventType: 'DATA_ACCESS',
+        resource: 'COMPLIANCE_CHECK',
+        resourceId: visitId ?? clientId ?? 'all',
+        action: 'COMPLIANCE_CHECK',
+        result: 'SUCCESS',
+        metadata: {
+          visitId,
+          clientId,
+          lookbackDays,
+          visitCount: result.visitResults.length,
+          overallStatus: result.overallStatus,
+          criticalIssueCount: result.criticalIssues.length,
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      // Log failure audit event
+      const user = req.user;
+      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+      if (user) {
+        const context: UserContext = {
+          userId: user.userId,
+          organizationId: user.organizationId ?? '',
+          roles: user.roles ?? [],
+          permissions: user.permissions ?? [],
+          branchIds: user.branchIds ?? [],
+        };
+        const bodyVisitId = typeof req.body?.visitId === 'string' ? req.body.visitId : null;
+        const bodyClientId = typeof req.body?.clientId === 'string' ? req.body.clientId : null;
+        await auditService.logEvent(context, {
+          eventType: 'DATA_ACCESS',
+          resource: 'COMPLIANCE_CHECK',
+          resourceId: bodyVisitId ?? bodyClientId ?? 'all',
+          action: 'COMPLIANCE_CHECK',
+          result: 'FAILURE',
+          metadata: {
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+        }).catch(() => {
+          // Swallow audit logging errors to not mask original error
+        });
+      }
+      next(error);
+    } finally {
+      await knexDb.destroy();
+    }
+  });
+
+  // POST /visits/:visitId/notes/:noteId/quality-score
+  // Score documentation quality for a visit note
+  router.post('/:visitId/notes/:noteId/quality-score', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const knexDbForQuality = getKnexInstance();
+    try {
+      const { noteId } = req.params;
+
+      if (noteId === undefined || noteId === '') {
+        res.status(400).json({ success: false, error: 'Note ID is required' });
+        return;
+      }
+
+      const qualityService = new DocumentationQualityService(knexDbForQuality);
+      const result = await qualityService.scoreDocumentationQuality({ noteId });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    } finally {
+      await knexDbForQuality.destroy();
+    }
+  });
+
+  // POST /visits/hospitalization-risk
+  // Predict hospitalization risk for a client
+  router.post('/hospitalization-risk', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const knexDbForRisk = getKnexInstance();
+    try {
+      const { clientId, lookbackDays } = req.body as { clientId?: string; lookbackDays?: number };
+
+      if (clientId == null || clientId === '') {
+        res.status(400).json({ success: false, error: 'Client ID is required' });
+        return;
+      }
+
+      const riskService = new HospitalizationRiskService(knexDbForRisk);
+      const result = await riskService.predictHospitalizationRisk({
+        clientId,
+        lookbackDays: lookbackDays ?? 30,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    } finally {
+      await knexDbForRisk.destroy();
+    }
+  });
+
+  // POST /visits/vitals-anomalies
+  // Detect anomalies in vital signs patterns
+  router.post('/vitals-anomalies', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const knexDbForVitals = getKnexInstance();
+    try {
+      const { clientId, lookbackDays } = req.body as { clientId?: string; lookbackDays?: number };
+
+      if (clientId == null || clientId === '') {
+        res.status(400).json({ success: false, error: 'Client ID is required' });
+        return;
+      }
+
+      const vitalsService = new VitalsAnomalyService(knexDbForVitals);
+      const result = await vitalsService.detectVitalsAnomalies({
+        clientId,
+        lookbackDays: lookbackDays ?? 30,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    } finally {
+      await knexDbForVitals.destroy();
+    }
+  });
+
+  // POST /visits/sentiment-analysis
+  // Analyze sentiment in visit notes to detect burnout, distress, concerns
+  router.post('/sentiment-analysis', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const knexDbForSentiment = getKnexInstance();
+    try {
+      const { clientId, caregiverId, lookbackDays } = req.body as { clientId?: string; caregiverId?: string; lookbackDays?: number };
+
+      if ((clientId == null || clientId === '') && (caregiverId == null || caregiverId === '')) {
+        res.status(400).json({ success: false, error: 'Either clientId or caregiverId is required' });
+        return;
+      }
+
+      const sentimentService = new SentimentAnalysisService(knexDbForSentiment);
+      const result = await sentimentService.analyzeSentiment({
+        clientId,
+        caregiverId,
+        lookbackDays: lookbackDays ?? 30,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    } finally {
+      await knexDbForSentiment.destroy();
+    }
+  });
+
+  // POST /visits/generate-report
+  // Generate AI-powered narrative reports from visit data
+  router.post('/generate-report', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const knexDbForReport = getKnexInstance();
+    try {
+      const { reportType, format, clientId, caregiverId, organizationId, startDate, endDate, includeRecommendations, customPrompt } = req.body as {
+        reportType?: string;
+        format?: string;
+        clientId?: string;
+        caregiverId?: string;
+        organizationId?: string;
+        startDate?: string;
+        endDate?: string;
+        includeRecommendations?: boolean;
+        customPrompt?: string;
+      };
+
+      if (reportType == null || reportType === '') {
+        res.status(400).json({ success: false, error: 'Report type is required' });
+        return;
+      }
+
+      const reportService = new ReportGenerationService(knexDbForReport);
+      const result = await reportService.generateReport({
+        reportType: reportType as import('@folkcare/visit-notes').ReportType,
+        format: format as import('@folkcare/visit-notes').ReportFormat | undefined,
+        clientId,
+        caregiverId,
+        organizationId,
+        startDate,
+        endDate,
+        includeRecommendations,
+        customPrompt,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    } finally {
+      await knexDbForReport.destroy();
+    }
+  });
+
+  // POST /visits/predict-duration
+  // Predict visit duration based on client needs and history
+  router.post('/predict-duration', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const knexDbForDuration = getKnexInstance();
+    try {
+      const { clientId, visitType, caregiverId, scheduledDate, tasksPlanned } = req.body as {
+        clientId?: string;
+        visitType?: string;
+        caregiverId?: string;
+        scheduledDate?: string;
+        tasksPlanned?: string[];
+      };
+
+      if (clientId == null || clientId === '') {
+        res.status(400).json({ success: false, error: 'Client ID is required' });
+        return;
+      }
+
+      if (visitType == null || visitType === '') {
+        res.status(400).json({ success: false, error: 'Visit type is required' });
+        return;
+      }
+
+      const durationService = new VisitDurationPredictionService(knexDbForDuration);
+      const result = await durationService.predictDuration({
+        clientId,
+        visitType,
+        caregiverId,
+        scheduledDate,
+        tasksPlanned,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    } finally {
+      await knexDbForDuration.destroy();
+    }
+  });
+
+  // POST /visits/staffing-demand
+  // AI-powered staffing demand prediction based on census and acuity
+  router.post('/staffing-demand', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const knexDbForStaffing = getKnexInstance();
+    try {
+      const organizationId = req.user?.organizationId;
+
+      if (typeof organizationId !== 'string') {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { branchId, forecastWeeks, serviceType } = req.body as {
+        branchId?: string;
+        forecastWeeks?: number;
+        serviceType?: string;
+      };
+
+      const staffingService = new StaffingDemandPredictionService(knexDbForStaffing);
+      const result = await staffingService.predictStaffingDemand({
+        organizationId,
+        branchId,
+        forecastWeeks: forecastWeeks ?? 4,
+        serviceType,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    } finally {
+      await knexDbForStaffing.destroy();
+    }
+  });
+
+  // POST /visits/caregiver-matching
+  // AI-powered caregiver-patient matching based on skills, availability, and preferences
+  router.post('/caregiver-matching', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const knexDbForMatching = getKnexInstance();
+    try {
+      const organizationId = req.user?.organizationId;
+
+      if (typeof organizationId !== 'string') {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const {
+        clientId,
+        serviceType,
+        requiredCertifications,
+        preferredSchedule,
+        maxDistanceMiles,
+        preferredLanguages,
+        excludeCaregiverIds,
+        maxResults,
+      } = req.body as {
+        clientId?: string;
+        serviceType?: string;
+        requiredCertifications?: string[];
+        preferredSchedule?: { dayOfWeek: number; startTime: string; endTime: string }[];
+        maxDistanceMiles?: number;
+        preferredLanguages?: string[];
+        excludeCaregiverIds?: string[];
+        maxResults?: number;
+      };
+
+      if (clientId == null || clientId === '') {
+        res.status(400).json({ success: false, error: 'Client ID is required' });
+        return;
+      }
+
+      const matchingService = new CaregiverMatchingService(knexDbForMatching);
+      const result = await matchingService.findMatches({
+        organizationId,
+        clientId,
+        serviceType,
+        requiredCertifications,
+        preferredSchedule,
+        maxDistanceMiles,
+        preferredLanguages,
+        excludeCaregiverIds,
+        maxResults,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    } finally {
+      await knexDbForMatching.destroy();
     }
   });
 

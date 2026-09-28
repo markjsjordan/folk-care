@@ -54,6 +54,7 @@
     "test:visual:update": "playwright test --config=playwright.visual.config.ts --update-snapshots",
     "lint": "turbo run lint",
     "typecheck": "turbo run build && tsc -b",
+    "perf:check": "npm run build:web && tsx scripts/check-performance-budgets.ts",
     "db:migrate": "cd packages/core && npm run db:migrate",
     "db:migrate:rollback": "cd packages/core && npm run db:migrate:rollback",
     "db:migrate:status": "cd packages/core && npm run db:migrate:status",
@@ -62,6 +63,8 @@
     "db:reset": "npm run db:nuke && npm run db:migrate",
     "db:reset:demo": "npm run db:nuke && npm run db:migrate && npm run db:seed:demo && npm run cache:clear",
     "db:nuke": "cd packages/core && npm run db:nuke",
+    "db:migration:create": "tsx scripts/generate-migration.ts",
+    "vertical:create": "tsx scripts/scaffold-vertical.ts",
     "cache:clear": "tsx scripts/clear-cache.ts",
     "db:env": "./scripts/db-env.sh",
     "db:env:preview": "./scripts/db-env.sh migrate --env=preview",
@@ -97,6 +100,7 @@
     "@types/supertest": "^6.0.3",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
+    "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.0.13",
     "chalk": "^5.6.2",
     "concurrently": "^9.2.1",
@@ -110,6 +114,8 @@
     "jscpd": "^4.0.5",
     "openapi-to-postmanv2": "^5.5.0",
     "patch-package": "^8.0.1",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
     "sql-lint": "^1.0.2",
     "supabase": "^2.62.5",
     "supertest": "^7.1.4",
@@ -117,7 +123,7 @@
     "turbo": "^2.6.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.13",
-    "wrangler": "^4.50.0"
+    "wrangler": "^4.53.0"
   },
   "engines": {
     "node": "22.x",
@@ -126,24 +132,28 @@
   "dependencies": {
     "@tanstack/react-query": "^5.90.10",
     "express-rate-limit": "^8.2.1",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "4.1.1",
     "rate-limit-redis": "^4.3.0",
     "react-joyride": "^3.0.0-7",
-    "react-native-reanimated": "~4.1.1",
-    "react-native-worklets": "^0.6.1",
+    "react-native-reanimated": "~4.2.0",
+    "react-native-worklets": "^0.7.1",
     "redis": "^5.10.0",
     "resend": "^6.5.2",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   },
   "optionalDependencies": {
-    "@esbuild/linux-x64": "0.27.0",
-    "@rollup/rollup-linux-x64-gnu": "4.53.2",
+    "@esbuild/linux-x64": "0.27.1",
+    "@rollup/rollup-linux-x64-gnu": "4.53.3",
     "@tailwindcss/oxide-linux-x64-gnu": "4.1.17",
     "lightningcss-linux-x64-gnu": "1.30.2"
   },
   "overrides": {
     "@types/express": "^5.0.5",
-    "express": "^5.1.0"
+    "express": "^5.2.1",
+    "body-parser": "^2.2.1",
+    "js-yaml": "4.1.1",
+    "esbuild": "^0.25.0",
+    "zod": "4.0.17"
   }
 }

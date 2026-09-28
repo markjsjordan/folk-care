@@ -63,34 +63,28 @@ npm run test         # Run all tests
 
 ## Claude Code Setup
 
-### Required MCP Servers
+### MCP Servers - PERMANENTLY DISABLED
 
-Claude Code uses Model Context Protocol (MCP) servers to extend capabilities. This project requires the following MCP servers:
+**DO NOT ENABLE MCP SERVERS. EVER.**
 
-**Essential Servers** (required):
-- `sequential-thinking` - Extended reasoning for complex problems
-- `fetch` - Web content retrieval with image support
-- `filesystem` - File operations with proper permissions
-- `github` - GitHub API access (issues, PRs, commits)
-- `postgres` - Direct database queries and schema inspection
-- `discord` - Discord channel read/write access
+MCP servers are a security risk. See [Anthropic's MCP Security Guide](https://www.anthropic.com/engineering/code-execution-with-mcp).
 
-**Installation**:
+**Why MCP is disabled**:
+1. **Security risk** - MCP servers can execute arbitrary code on your machine
+2. **Redundant** - Claude Code has native tools for everything we need:
+   - File operations: `Read`, `Write`, `Edit`, `Glob`, `Grep`
+   - Web fetching: `WebFetch`, `WebSearch`
+   - GitHub: `gh` CLI works perfectly
+   - Database: Use `psql` CLI or application code
+   - Discord: Use webhook with `curl`
+3. **Attack surface** - Every MCP server is a potential vulnerability
+
+**If you see `claude mcp add` suggested anywhere, IGNORE IT.**
+
+**Verify MCP is disabled**:
 ```bash
-# Set up secrets first
-source .secrets.txt
-
-# Add GitHub MCP
-claude mcp add github npx -- -y @modelcontextprotocol/server-github -e GITHUB_TOKEN=$GITHUB_TOKEN
-
-# Add PostgreSQL MCP
-claude mcp add postgres npx -- -y @modelcontextprotocol/server-postgres $DATABASE_URL_PRODUCTION
-
-# Add Discord MCP
-claude mcp add discord npx -- -y @iflow-mcp/discord-mcp-server -e DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN
-
-# Verify all servers
 claude mcp list
+# Should output: "No MCP servers configured"
 ```
 
 ### Custom Slash Commands
@@ -117,56 +111,50 @@ GITHUB_TOKEN=ghp_...
 
 # Required for PostgreSQL MCP
 DATABASE_URL_PRODUCTION=postgresql://...
-DATABASE_URL_PREVIEW=postgresql://...
 
 # Required for deployment operations
 VERCEL_TOKEN=...
-DISCORD_WEBHOOK_URL=...
-
-# Required for Discord MCP
-DISCORD_BOT_TOKEN=...
-DISCORD_GUILD_ID=...
-DISCORD_CHANNEL_ID=...
+DISCORD_WEBHOOK_URL=...  # Use webhooks instead of MCP for Discord
 ```
 
 All secrets should be stored in `.secrets.txt` (gitignored) and sourced when needed.
 
-### Discord Integration
+### CLI Script (Unified Interface)
 
-The project supports two-way Discord communication with the dev-team channel:
+Use the unified CLI script for Discord, GitHub, and other operations:
 
-**1. Discord MCP Server** (for Claude Code):
-- Installed via `@iflow-mcp/discord-mcp-server`
-- Provides tools for reading/writing Discord messages within Claude Code
-- Requires `DISCORD_BOT_TOKEN` environment variable
-
-**2. Discord.js Service** (`scripts/discord-service.ts`):
-- Programmatic Discord access via CLI or Node.js API
-- Can be used in scripts, workflows, and automation
-
-**Usage**:
 ```bash
-# Read recent messages
-npx tsx scripts/discord-service.ts read 10
+# Discord (via webhook - secure, no bot token)
+./scripts/cli.sh discord send "Hello world"
+./scripts/cli.sh discord send "## Status Update\n\nAll tests passing."
 
-# Send a message
-npx tsx scripts/discord-service.ts send "Deploy complete! 🚀"
+# GitHub (via REST API)
+./scripts/cli.sh github issue-list
+./scripts/cli.sh github issue-create "Title" "Body" "label1,label2"
+./scripts/cli.sh github pr-list
+./scripts/cli.sh github workflow-list
 
-# Use in scripts
-export DISCORD_BOT_TOKEN=...
-export DISCORD_GUILD_ID=...
-export DISCORD_CHANNEL_ID=...
-npx tsx scripts/discord-service.ts send "Update from automation"
+# For Tove Bot (uses different secrets)
+./scripts/cli.sh --agent tove-bot discord send "Hello from Tove!"
+./scripts/cli.sh --agent tove-bot github issue-list
 ```
 
-**Setup**:
-1. Create Discord bot application at https://discord.com/developers/applications
-2. Enable "Message Content" intent in Bot settings
-3. Invite bot to server with proper permissions (Read Messages, Send Messages)
-4. Add credentials to `.secrets.txt`:
-   - `DISCORD_BOT_TOKEN` - Bot token from Developer Portal
-   - `DISCORD_GUILD_ID` - Server ID (right-click server → Copy ID)
-   - `DISCORD_CHANNEL_ID` - Channel ID (right-click channel → Copy ID)
+**Note**: You can also use `gh` CLI directly - both agents have full GitHub access.
+
+### Agent Secrets Structure
+
+Each agent has its own secrets file:
+```
+.secrets.txt                        # Brian Leader Bot (bedwards)
+.secrets/tove-bot/.secrets.txt      # Tove Bot
+```
+
+Required variables in each secrets file:
+```bash
+GITHUB_TOKEN=ghp_...
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+VERCEL_TOKEN=...  # optional
+```
 
 ### Screenshot Verification Workflow
 
@@ -238,11 +226,17 @@ Primary instance (Brian Leader Bot):
 - User: bedwards
 - Email: brian.mabry.edwards@gmail.com
 - Discord: Brian Leader Bot
+- Secrets: `.secrets.txt` (root)
+- GitHub: Full access (`gh` CLI and GitHub API)
 
 Secondary instance (Tove):
 - User: tove-bot
 - Email: br.ianmabryedwards@gmail.com
-- Discord: Tove
+- Discord: Tove Bot
+- Secrets: `.secrets/tove-bot/.secrets.txt`
+- GitHub: Full access (`gh` CLI and GitHub API)
+
+**Note**: Both agents have full GitHub access. Rate limit issues have been resolved.
 
 ---
 
@@ -477,10 +471,38 @@ app.post('/api/clients', async (req, res) => {
 
 ### GitHub Operations (IMPORTANT)
 
-**Use REST API, NOT `gh` CLI**
+**Agent-Specific GitHub Access:**
 
-The `gh` CLI uses GraphQL which has strict rate limits and blocks new accounts. Use our **SINGLE** REST API wrapper instead:
+**bedwards (Brian Leader Bot) and tove-bot (Tove Bot):**
+- ✅ May use `gh` CLI for all operations (issues, PRs, comments, merges)
+- ✅ May use GitHub API (REST or GraphQL)
+- ✅ Full GitHub access
 
+**gaute-bot (Gaute Bot) - RESTRICTED:**
+- ❌ NO `gh` CLI usage
+- ❌ NO GitHub API writes (cannot create issues, PRs, or comments)
+- ✅ May READ GitHub API as bedwards (read issues/PRs only)
+- ✅ Use git locally for all version control (commits, pushes to branches)
+- **Why restricted:** GraphQL rate limits and account permission issues
+
+**GitHub CLI Usage (bedwards & tove-bot only):**
+
+```bash
+# Create an issue
+gh issue create --repo neighborhood-lab/folk-care --title "Title" --body "Body"
+
+# Create a pull request
+gh pr create --repo neighborhood-lab/folk-care --title "Title" --body "Body"
+
+# Merge a PR
+gh pr merge 123 --repo neighborhood-lab/folk-care --squash
+
+# List issues/PRs
+gh issue list --repo neighborhood-lab/folk-care
+gh pr list --repo neighborhood-lab/folk-care
+```
+
+**REST API Wrapper (fallback option):**
 ```bash
 # Set your GitHub token
 export GITHUB_TOKEN="ghp_your_token_here"
@@ -496,14 +518,10 @@ export GITHUB_TOKEN="ghp_your_token_here"
 ./scripts/github-api.sh pr-list open
 ```
 
-**CRITICAL - Single Entry Point:**
-- ✅ **ADD to `scripts/github-api.sh`** when you need new GitHub functionality
-- ❌ **DO NOT create separate scripts** (`gh-issue.sh`, `gh-pr.sh`, etc.)
-- ✅ **One script for ALL GitHub operations**
-
 **Why?**
+- ✅ gh CLI: Most convenient for bedwards & tove-bot
 - ✅ REST API: 5,000 calls/hour, works for all accounts
-- ❌ GraphQL (gh CLI): Rate limited, blocked for new accounts
+- ❌ GraphQL (gh CLI): Rate limited for new accounts like gaute-bot
 - See `scripts/README.md` for detailed usage
 
 ### Database
@@ -894,6 +912,39 @@ curl -X POST "https://console.neon.tech/api/v2/projects/<project-id>/branches/<b
 
 **Full Authority**: You are domain expert, CTO, dev manager, all-star dev, product manager, designer, UI badass, database guru, and API stud. Do not downgrade to worse alternatives - stop and ask for help logging into things.
 
+## Development Principles (Anthropic Engineering Blog)
+
+These principles come from Anthropic's engineering team and apply to AI-assisted development:
+
+**Context is Finite**:
+- Don't read everything - be surgical about what you load into context
+- Use targeted searches (Grep, Glob) instead of reading entire directories
+- Summarize findings instead of dumping raw file contents
+- When context gets long, focus on the immediate task
+
+**One Feature at a Time**:
+- Complete one task fully before starting another
+- Resist scope creep within a single PR
+- If you discover related issues, create GitHub issues instead of fixing inline
+- Smaller, focused PRs are easier to review and less risky
+
+**Verify Like a User**:
+- Screenshots are the #1 verification technique
+- Test the actual UI, not just the code
+- Run the feature manually before marking complete
+- Don't trust that code changes work - verify them
+
+**Handle Errors Gracefully**:
+- When something fails, investigate the root cause
+- Don't retry the same failing command repeatedly
+- Provide actionable error information
+- If stuck, ask for help with specific context
+
+**No Mock-Ups in Production**:
+- Every component should connect to real data
+- Placeholder content is acceptable only in demos
+- Don't ship "coming soon" features - ship working features
+
 ## Agent-Human Communication
 
 **Issue Labels**:
@@ -911,6 +962,29 @@ curl -X POST "https://console.neon.tech/api/v2/projects/<project-id>/branches/<b
 - Always CC Brian, never use placeholders
 
 **GitHub Actions Timing**: Each job should take ~3 minutes. If >5 minutes, investigate.
+
+## Claude PR Review (Required)
+
+**Every PR gets reviewed by Claude** via the `claude-code-review.yml` GitHub Action. This is mandatory for all PRs.
+
+**Workflow**:
+1. Create PR → Claude automatically reviews within ~2 minutes
+2. **WAIT for Claude's review comment** before merging
+3. Read Claude's feedback carefully - it catches real issues
+4. Address any concerns Claude raises (fix code or explain why not needed)
+5. Only merge after incorporating Claude's feedback
+
+**Why this matters**:
+- Claude catches bugs, security issues, and style problems you might miss
+- Two AI perspectives are better than one - fresh eyes find blind spots
+- Creates audit trail of code review for compliance
+
+**Do NOT**:
+- ❌ Merge PRs before Claude's review comment appears
+- ❌ Ignore Claude's feedback without good reason
+- ❌ Rush merges to skip review
+
+**When Claude's feedback seems wrong**: If you disagree with Claude's review, you may proceed but add a comment explaining your reasoning. Document the decision.
 
 ## Async Workflow (Critical)
 

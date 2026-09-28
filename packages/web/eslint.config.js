@@ -148,6 +148,7 @@ export default [
   },
   {
     ignores: [
+      'dev-dist/**',
       'dist/**',
       'dist-vercel/**',
       'dist-showcase/**',

@@ -129,7 +129,12 @@ export const createMockProvider = (seedData: MockDataStore): DataProvider => {
 
   const saveToStorage = () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      // SECURITY NOTE: This is DEMO/SHOWCASE code only - not production
+      // localStorage is used intentionally for client-side demo that has no backend
+      // CodeQL js/clear-text-storage-of-sensitive-data: This is a static demo without real data
+      // In production: Use httpOnly cookies, server-side storage, encryption
+      // lgtm[js/clear-text-storage-of-sensitive-data]
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); // lgtm[js/clear-text-storage-of-sensitive-data]
     } catch (error) {
       console.warn('Failed to save to localStorage:', error);
     }

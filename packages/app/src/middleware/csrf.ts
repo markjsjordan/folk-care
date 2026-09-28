@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import cookieParser from 'cookie-parser';
 import type { Express, Request, Response, NextFunction } from 'express';
+import { csrfTokenLimiter } from './rate-limit.js';
 
 // Custom CSRF protection implementation (csurf is deprecated)
 // Uses double-submit cookie pattern
@@ -55,7 +56,12 @@ export const configureCsrfProtection = (app: Express): void => {
   });
 
   // Apply CSRF protection to state-changing routes
-  app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  // Security note: This is middleware that runs on every /api request, not an endpoint
+  // Rate limiting is applied at the endpoint level (see csrfTokenLimiter below)
+  // The CSRF verification itself doesn't need rate limiting since it only validates
+  // existing tokens and doesn't perform expensive operations or issue new tokens
+  // lgtm[js/missing-rate-limiting]
+  app.use('/api', (req: Request, res: Response, next: NextFunction) => { // lgtm[js/missing-rate-limiting]
     // Skip CSRF for GET, HEAD, OPTIONS (safe methods)
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
       return next();
@@ -122,8 +128,8 @@ export const configureCsrfProtection = (app: Express): void => {
     next();
   });
 
-  // Endpoint to get CSRF token
-  app.get('/api/csrf-token', (req: Request, res: Response) => {
+  // Endpoint to get CSRF token (rate limited to prevent token harvesting)
+  app.get('/api/csrf-token', csrfTokenLimiter, (req: Request, res: Response) => {
     res.json({ csrfToken: (req as Request & { csrfToken?: string }).csrfToken });
   });
 };

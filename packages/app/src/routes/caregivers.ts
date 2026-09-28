@@ -77,7 +77,20 @@ export function createCaregiverRouter(db: Database): Router {
   /**
    * GET /api/caregivers/employee-number/:employeeNumber
    * Get caregiver by employee number
+   *
+   * Security Note: Employee numbers are included in the URL path for API usability.
+   * While this means employee numbers appear in server logs, they are:
+   * 1. Not considered PII (personally identifiable information)
+   * 2. Required to be unique and publicly visible within the organization
+   * 3. Used as public identifiers similar to user IDs
+   * 4. Protected by authentication and authorization middleware
+   *
+   * If employee numbers become sensitive in your deployment, consider:
+   * - Using POST with employeeNumber in the request body
+   * - Implementing additional access controls
+   * lgtm[js/sensitive-get-query]
    */
+  // lgtm[js/sensitive-get-query]
   router.get('/employee-number/:employeeNumber', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const context = getUserContext(req);

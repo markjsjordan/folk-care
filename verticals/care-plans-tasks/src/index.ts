@@ -35,3 +35,48 @@ export {
 
 // API Handlers
 export { createCarePlanHandlers } from './api/care-plan-handlers';
+
+// Task Prioritization Service
+export {
+  TaskPrioritizationService,
+  createTaskPrioritizationService,
+  type TaskPrioritizationConfig,
+  type PrioritizedTask,
+  type PrioritizeTasksRequest,
+  type TaskPrioritizationResult,
+} from './services/task-prioritization-service';
+
+// Task Prioritization Routes
+export { createTaskPrioritizationRoutes } from './routes/task-prioritization-routes';
+
+// Natural Language Care Plan Service (AI-powered)
+export {
+  NaturalLanguageCarePlanService,
+  createNaturalLanguageCarePlanService,
+  type NaturalLanguageCarePlanRequest,
+  type NaturalLanguageCarePlanResult,
+  type GeneratedGoal,
+  type GeneratedIntervention,
+  type GeneratedTaskTemplate,
+} from './services/natural-language-care-plan-service';
+
+// Natural Language Care Plan Routes
+export { createNaturalLanguageCarePlanRoutes } from './routes/natural-language-care-plan-routes';
+
+// Care Plan Effectiveness Scoring Service (AI-powered)
+export {
+  CarePlanEffectivenessService,
+  type EffectivenessScoreRequest,
+  type CarePlanEffectivenessScore,
+  type EffectivenessRating,
+  type TrendDirection,
+  type GoalProgress,
+  type TaskMetrics,
+  type HealthTrend,
+  type IncidentSummary,
+  type DimensionScore,
+  type EffectivenessRecommendation,
+} from './services/care-plan-effectiveness-service';
+
+// Care Plan Effectiveness Routes
+export { createCarePlanEffectivenessRoutes } from './routes/care-plan-effectiveness-routes';

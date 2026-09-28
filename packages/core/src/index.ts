@@ -74,6 +74,7 @@ export * from './utils/password-validator';
 export * from './utils/sensitive-data-filter';
 export * from './middleware/sanitize-input';
 export * from './services/account-lockout.service';
+export * from './services/data-export.service';
 export * from './sync/index';
 export * from './demo/index';
 export * from './providers/index';
@@ -111,3 +112,11 @@ export * from './import/index';
 export * from './compliance/autopilot/index';
 // Demo Data Service
 export { DemoDataService, type DemoDataStats } from './service/demo-data-service.js';
+// AI Provider Abstraction Layer
+export * from './ai/index.js';
+// FHIR R4 Export
+export * from './fhir/index.js';
+// HL7 v2.x Export
+export * from './hl7/index.js';
+// Plugin System
+export * from './plugins/index.js';
