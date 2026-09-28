@@ -60,13 +60,42 @@ interface CustomEventProps extends EventProps<CalendarEvent> {
   densityMode: DensityMode;
 }
 
-// Render the appropriate icon for a visit type
 const VisitTypeIconRenderer: React.FC<{ serviceTypeName: string; className?: string }> = ({ serviceTypeName, className }) => {
   const name = serviceTypeName.toLowerCase();
   if (name.includes('home') || name.includes('personal')) return <Home className={className} />;
   if (name.includes('phone') || name.includes('call')) return <Phone className={className} />;
   if (name.includes('clinic') || name.includes('office')) return <Building2 className={className} />;
   return <Clock className={className} />;
+};
+
+// Helper function to normalize time format from backend (handles AM/PM and 24-hour formats)
+const normalizeTimeFormat = (timeStr: string | undefined): string => {
+  if (!timeStr) return '00:00';
+  
+  // Already in HH:MM format
+  if (/^\d{1,2}:\d{2}$/.test(timeStr.trim())) {
+    return timeStr.trim();
+  }
+  
+  // Handle AM/PM format (e.g., "07:23 AM" or "2:30 PM")
+  const ampmMatch = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)$/i);
+  if (ampmMatch) {
+    let hours = parseInt(ampmMatch[1]!, 10);
+    const minutes = ampmMatch[2]!;
+    const meridiem = ampmMatch[3]!.toUpperCase();
+    
+    // Convert to 24-hour format
+    if (meridiem === 'PM' && hours !== 12) {
+      hours += 12;
+    } else if (meridiem === 'AM' && hours === 12) {
+      hours = 0;
+    }
+    
+    return `${String(hours).padStart(2, '0')}:${minutes}`;
+  }
+  
+  // Fallback: return as-is if already valid
+  return timeStr.trim();
 };
 
 const CustomEvent: React.FC<CustomEventProps> = ({ event, densityMode }) => {
@@ -142,6 +171,7 @@ export const CalendarView: React.FC = () => {
   const [showMiniCalendar, setShowMiniCalendar] = useState(true);
   const [showLegend, setShowLegend] = useState(true);
   const [selectedBranches] = useState<string[]>([]);
+  const [selectedCaregiverFilter, setSelectedCaregiverFilter] = useState<string | null>(null);
 
   // Week view UX controls
   const [densityMode, setDensityMode] = useState<DensityMode>(() => {
@@ -260,9 +290,11 @@ export const CalendarView: React.FC = () => {
         ? new Date(visit.scheduledDate)
         : visit.scheduledDate;
 
-      // Parse time strings (HH:MM) and combine with date
-      const [startHour, startMinute] = visit.scheduledStartTime.split(':').map(Number);
-      const [endHour, endMinute] = visit.scheduledEndTime.split(':').map(Number);
+      // Parse time strings (HH:MM or AM/PM format) and combine with date
+      const normalizedStart = normalizeTimeFormat(visit.scheduledStartTime);
+      const normalizedEnd = normalizeTimeFormat(visit.scheduledEndTime);
+      const [startHour, startMinute] = normalizedStart.split(':').map(Number);
+      const [endHour, endMinute] = normalizedEnd.split(':').map(Number);
 
       const start = new Date(scheduledDate);
       start.setHours(startHour ?? 0, startMinute ?? 0, 0, 0);
@@ -319,12 +351,12 @@ export const CalendarView: React.FC = () => {
     }
   }, []);
 
-  // Handle event selection
+  // Handle event selection - toast notification (modal implementation deferred to future)
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    // Note: Visit detail modal to be implemented in future iteration
-    toast(`Visit: ${event.title}`, {
-      duration: 2000,
+    toast(`Visit: ${event.title} - Date: ${moment(event.start).format('YYYY-MM-DD HH:mm')}`, {
+      duration: 3000,
     });
+    // Future: Open visit detail modal with pre-populated date from event.start
   }, []);
 
   // Handle slot selection (creating new visit)
@@ -886,11 +918,17 @@ export const CalendarView: React.FC = () => {
                   const end = moment(visit.scheduled_end_time, 'HH:mm');
                   return acc + end.diff(start, 'hours', true);
                 }, 0);
+                const isSelected = selectedCaregiverFilter === caregiver.caregiver_id;
 
                 return (
                   <div
                     key={caregiver.caregiver_id}
-                    className="border rounded-lg p-3 hover:shadow-md transition-shadow"
+                    onClick={() => setSelectedCaregiverFilter(isSelected ? null : caregiver.caregiver_id)}
+                    className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                      isSelected
+                        ? 'ring-2 ring-offset-2 ring-blue-500 shadow-md'
+                        : 'hover:shadow-md hover:border-gray-300'
+                    }`}
                   >
                     <div className="flex items-center gap-2 mb-2">
                       <div
@@ -900,6 +938,7 @@ export const CalendarView: React.FC = () => {
                       <span className="font-medium text-gray-900">
                         {caregiver.first_name} {caregiver.last_name}
                       </span>
+                      {isSelected && <span className="ml-auto text-xs font-semibold text-blue-600">FILTERED</span>}
                     </div>
 
                     <div className="text-xs text-gray-600 mb-2">
