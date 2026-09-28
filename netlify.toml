@@ -4,9 +4,9 @@
 
 [build]
   # Use the main web app build output (NOT showcase)
-  # Build @folkcare/core first (dependency), then @folkcare/web
+  # Build all workspaces in dependency order, then web app
   base = "."
-  command = "npm run build --workspace=@folkcare/core && npm run build --workspace=@folkcare/web"
+  command = "npm run build --workspaces --if-present"
   publish = "packages/web/dist"
 
 [build.environment]
