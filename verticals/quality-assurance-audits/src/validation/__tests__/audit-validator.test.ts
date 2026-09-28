@@ -24,11 +24,19 @@ import {
   updateCorrectiveActionProgressSchema,
 } from '../audit-validator.js';
 
-// Fixed timestamps for deterministic tests
-const FIXED_DATE = '2024-01-15T10:00:00.000Z';
-const PAST_DATE = '2024-01-10T10:00:00.000Z';
-const FUTURE_DATE = '2026-01-15T10:00:00.000Z';
-const NEAR_FUTURE_DATE = '2025-12-15T10:00:00.000Z';
+// Generate dynamic timestamps for deterministic tests
+// Use current date and adjust from there to ensure future dates
+const now = new Date();
+const generateFutureDate = (daysFromNow: number): string => {
+  const date = new Date(now);
+  date.setDate(date.getDate() + daysFromNow);
+  return date.toISOString();
+};
+
+const FIXED_DATE = generateFutureDate(1); // Tomorrow
+const PAST_DATE = new Date(now.getTime() - 86400000).toISOString(); // Yesterday
+const FUTURE_DATE = generateFutureDate(365); // One year from now
+const NEAR_FUTURE_DATE = generateFutureDate(320); // ~11 months from now
 
 describe('Audit Validator', () => {
   describe('Enum Schemas', () => {

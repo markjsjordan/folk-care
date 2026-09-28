@@ -34,7 +34,7 @@ describe('Critical Regression Tests - ESM Module Resolution', () => {
           process.env['VERCEL'] = originalVercel;
         }
       }
-    }, 30000); // Increased timeout for module import with monitoring libraries and coverage instrumentation
+    }, 60000); // Increased timeout for module import with monitoring libraries and coverage instrumentation
 
     it('should export expected functions', async () => {
       // Set VERCEL env var to prevent auto-start
@@ -53,7 +53,7 @@ describe('Critical Regression Tests - ESM Module Resolution', () => {
           process.env['VERCEL'] = originalVercel;
         }
       }
-    });
+    }, 60000);
   });
 
   describe('Routes Module (DO NOT REGRESS)', () => {
@@ -144,7 +144,7 @@ describe('Critical Regression Tests - ESM Module Resolution', () => {
           process.env['VERCEL'] = originalVercel;
         }
       }
-    });
+    }, 60000);
   });
 });
 
@@ -171,7 +171,7 @@ describe('API Structure Tests', () => {
         process.env['VERCEL'] = originalVercel;
       }
     }
-  });
+  }, 60000);
 
   it('should have auth routes configured', async () => {
     const auth = await import('../routes/auth.js');

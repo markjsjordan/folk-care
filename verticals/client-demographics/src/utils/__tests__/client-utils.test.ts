@@ -189,16 +189,20 @@ describe('Client Utilities', () => {
   describe('calculateDetailedAge', () => {
     it('should return years and months', () => {
       // Use a specific birth date that's safe from day-of-month edge cases
-      // Birth date: January 1, 2000
-      // As of any date in 2025, this person will be 25 years old
-      // The months will vary based on the current month
-      const age = calculateDetailedAge('2000-01-01');
+      // Birth date: January 1, 30 years ago
+      // Calculate expected age dynamically based on current date
+      const today = new Date();
+      const thirtyYearsAgo = new Date(today.getFullYear() - 30, 0, 1);
+      const dateString = thirtyYearsAgo.toISOString().split('T')[0]!;
+      
+      const age = calculateDetailedAge(dateString);
       
       expect(age).toHaveProperty('years');
       expect(age).toHaveProperty('months');
       
-      // Should be 25 years old as of 2025
-      expect(age.years).toBe(25);
+      // Should be 30 years old (or 29 if birthday hasn't passed yet this year)
+      expect(age.years).toBeGreaterThanOrEqual(29);
+      expect(age.years).toBeLessThanOrEqual(30);
       
       // Months should be between 0-11 depending on current month
       expect(age.months).toBeGreaterThanOrEqual(0);

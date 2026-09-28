@@ -112,6 +112,9 @@ describe('OhioComplianceValidator', () => {
       const expirationDate = new Date(checkDate);
       expirationDate.setDate(expirationDate.getDate() + (365 * 5)); // Expires in ~50 days
 
+      const licenseExpiry = new Date(today);
+      licenseExpiry.setFullYear(licenseExpiry.getFullYear() + 1); // Expires next year
+
       const caregiver: CaregiverCredentials = {
         backgroundScreening: {
           type: 'FINGERPRINT',
@@ -125,7 +128,7 @@ describe('OhioComplianceValidator', () => {
             state: 'OH',
             number: 'HHA123456',
             issueDate: new Date('2020-01-01'),
-            expirationDate: new Date('2026-01-01'),
+            expirationDate: licenseExpiry,
             status: 'ACTIVE',
           },
         ],

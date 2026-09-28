@@ -72,7 +72,7 @@ export function VoiceNoteRecorder({
       audioChunks.current = [];
 
       // Check browser support
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (!navigator.mediaDevices?.getUserMedia) {
         setErrorMessage('Your browser does not support audio recording');
         return;
       }
@@ -95,7 +95,7 @@ export function VoiceNoteRecorder({
         await transcribeAudio(audioBlob);
 
         // Stop all tracks to release microphone
-        stream.getTracks().forEach(track => track.stop());
+        for (const track of stream.getTracks()) track.stop();
       };
 
       recorder.start();
@@ -140,7 +140,7 @@ export function VoiceNoteRecorder({
   function cancelRecording() {
     if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
       mediaRecorder.current.stop();
-      mediaRecorder.current.stream.getTracks().forEach(track => track.stop());
+      for (const track of mediaRecorder.current.stream.getTracks()) track.stop();
     }
     setIsRecording(false);
     setRecordingDuration(0);
