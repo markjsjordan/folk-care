@@ -3,7 +3,8 @@
 # Triggers on pushes to production branch
 
 [build]
-  # Use the main web app build output
+  # Use the main web app build output (NOT showcase)
+  # Cache buster: 2026-09-27-web-app-deployment
   base = "."
   command = "turbo run build --filter @folkcare/web"
   publish = "packages/web/dist"
