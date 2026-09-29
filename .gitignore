@@ -203,6 +203,7 @@ packages/core/migrations/*.d.ts.map
 # Exception: Allow marketing and about site images
 !marketing/*.png
 !about/public/images/*.png
+!packages/web/src/assets/*.png
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Mobile-specific (React Native / Expo)

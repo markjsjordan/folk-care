@@ -60,7 +60,7 @@ describe('StateConfigPanel', () => {
     expect(resetButton).toBeDisabled();
   });
 
-  it('should enable Save and Reset buttons after changes', () => {
+  it('should enable the Reset button after changes, but keep Save disabled (feature not yet implemented)', () => {
     render(<StateConfigPanel />);
     
     // Make a change to geofence tolerance
@@ -69,7 +69,9 @@ describe('StateConfigPanel', () => {
 
     const saveButton = screen.getByRole('button', { name: /save changes/i });
     const resetButton = screen.getByRole('button', { name: /reset/i });
-    expect(saveButton).not.toBeDisabled();
+    // Save persistence is intentionally disabled with an honest "Coming Soon"
+    // label (FC-009) until the backend API exists — only Reset should enable.
+    expect(saveButton).toBeDisabled();
     expect(resetButton).not.toBeDisabled();
   });
 
