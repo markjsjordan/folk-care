@@ -122,16 +122,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const filteredNavItems = navItems.filter((item) => {
     // Always show dashboard
     if (item.path === '/') return true;
-    
+
+    // Admin section: visible to admin-tier roles regardless of the
+    // granular admin:access permission, since SUPER_ADMIN/ORG_ADMIN users
+    // are commonly granted broad resource wildcards (e.g. "clients:*")
+    // rather than an explicit "admin:access" entry.
+    if (item.path === '/admin') {
+      const adminRoles = ['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_ADMIN', 'ADMIN'];
+      if (user?.roles.some((role) => adminRoles.includes(role))) {
+        return true;
+      }
+      if (item.permission && !can(item.permission)) return false;
+      return true;
+    }
+
     // Check permission if specified
     if (item.permission && !can(item.permission)) return false;
-    
-    // Hide admin section from non-admin users
-    if (item.path === '/admin' && user) {
-      const adminRoles = ['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_ADMIN', 'ADMIN'];
-      return user.roles.some((role) => adminRoles.includes(role));
-    }
-    
+
     return true;
   });
 

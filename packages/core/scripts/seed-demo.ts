@@ -152,7 +152,8 @@ const ROLES: RoleDefinition[] = [
     permissions: [
       'organizations:*', 'users:*', 'clients:*', 'caregivers:*',
       'visits:*', 'schedules:*', 'care-plans:*', 'tasks:*', 'billing:*',
-      'reports:*', 'settings:*'
+      'reports:*', 'settings:*', 'evv:*', 'compliance:*', 'audits:*',
+      'admin:*'
     ]
   },
   {
