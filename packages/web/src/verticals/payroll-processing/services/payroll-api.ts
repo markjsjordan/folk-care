@@ -58,28 +58,28 @@ export const createPayrollApiService = (apiClient: ApiClient): PayrollApiService
       if (filters?.startDate) params.append('startDate', filters.startDate);
       if (filters?.endDate) params.append('endDate', filters.endDate);
 
-      const url = `/api/payroll/runs${params.toString() ? `?${params.toString()}` : ''}`;
+      const url = `/api/payroll/pay-runs${params.toString() ? `?${params.toString()}` : ''}`;
       return apiClient.get<PayRunListResponse>(url);
     },
 
     getPayRunById: async (id: string) => {
-      return apiClient.get<PayRun>(`/api/payroll/runs/${id}`);
+      return apiClient.get<PayRun>(`/api/payroll/pay-runs/${id}`);
     },
 
     createPayRun: async (input: CreatePayRunInput) => {
-      return apiClient.post<PayRun>('/api/payroll/runs', input);
+      return apiClient.post<PayRun>('/api/payroll/pay-runs', input);
     },
 
     calculatePayRun: async (id: string) => {
-      return apiClient.post<PayRun>(`/api/payroll/runs/${id}/calculate`, {});
+      return apiClient.post<PayRun>(`/api/payroll/pay-runs/${id}/calculate`, {});
     },
 
     approvePayRun: async (id: string, input?: ApprovePayRunInput) => {
-      return apiClient.post<PayRun>(`/api/payroll/runs/${id}/approve`, input || {});
+      return apiClient.post<PayRun>(`/api/payroll/pay-runs/${id}/approve`, input || {});
     },
 
     processPayRun: async (id: string) => {
-      return apiClient.post<PayRun>(`/api/payroll/runs/${id}/process`, {});
+      return apiClient.post<PayRun>(`/api/payroll/pay-runs/${id}/process`, {});
     },
 
     getPayStubs: async (filters?: PayStubSearchFilters) => {
@@ -93,16 +93,16 @@ export const createPayrollApiService = (apiClient: ApiClient): PayrollApiService
       if (filters?.startDate) params.append('startDate', filters.startDate);
       if (filters?.endDate) params.append('endDate', filters.endDate);
 
-      const url = `/api/payroll/stubs${params.toString() ? `?${params.toString()}` : ''}`;
+      const url = `/api/payroll/pay-stubs${params.toString() ? `?${params.toString()}` : ''}`;
       return apiClient.get<PayStubListResponse>(url);
     },
 
     getPayStubById: async (id: string) => {
-      return apiClient.get<PayStub>(`/api/payroll/stubs/${id}`);
+      return apiClient.get<PayStub>(`/api/payroll/pay-stubs/${id}`);
     },
 
     downloadPayStubPdf: async (id: string) => {
-      const response = await fetch(`/api/payroll/stubs/${id}/pdf`, {
+      const response = await fetch(`/api/payroll/pay-stubs/${id}/pdf`, {
         headers: {
           'Authorization': `Bearer ${globalThis.localStorage.getItem('token')}`,
         },
