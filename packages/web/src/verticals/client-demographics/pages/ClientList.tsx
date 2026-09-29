@@ -89,7 +89,7 @@ export const ClientList: React.FC = () => {
       {hasDemoData && (
         <DemoDataBanner
           onClearDemo={clearDemoData}
-          onAddRealData={() => navigate('/clients/new')}
+          onAddRealData={() => navigate('/clients/intake')}
           isClearing={isClearing}
           stats={stats || undefined}
         />
@@ -124,7 +124,7 @@ export const ClientList: React.FC = () => {
                   variant="primary"
                   size="lg"
                   leftIcon={<Plus className="h-4 w-4" />}
-                  onClick={() => navigate('/clients/new')}
+                  onClick={() => navigate('/clients/intake')}
                 >
                   Add Client
                 </Button>

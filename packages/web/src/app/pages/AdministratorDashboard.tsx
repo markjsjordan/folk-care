@@ -341,7 +341,7 @@ export const AdministratorDashboard: React.FC = () => {
       title: 'Run Reports',
       description: 'Analytics and compliance reports',
       icon: <FileText className="h-5 w-5" />,
-      onClick: () => navigate('/reports'),
+      onClick: () => navigate('/analytics/reports'),
     },
     {
       title: 'System Activity',

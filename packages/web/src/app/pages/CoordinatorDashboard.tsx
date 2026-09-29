@@ -11,7 +11,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/core/hooks';
-import { Card, CardContent, Button, EmptyState } from '@/core/components';
+import { Card, CardContent, Button, EmptyState, DemoBadge } from '@/core/components';
 import {
   Users,
   AlertCircle,
@@ -353,6 +353,7 @@ export const CoordinatorDashboard: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900">
               Unassigned Visits - Needs Immediate Attention
             </h2>
+            <DemoBadge size="sm" />
           </div>
           <Button
             variant="primary"
@@ -386,9 +387,12 @@ export const CoordinatorDashboard: React.FC = () => {
         {/* Conflicts */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Caregiver Availability Conflicts
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Caregiver Availability Conflicts
+              </h2>
+              <DemoBadge size="sm" />
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -407,9 +411,12 @@ export const CoordinatorDashboard: React.FC = () => {
         {/* Intake Queue */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Client Intake Queue
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Client Intake Queue
+              </h2>
+              <DemoBadge size="sm" />
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -429,9 +436,12 @@ export const CoordinatorDashboard: React.FC = () => {
       {/* Visit Exceptions */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Visit Exceptions Requiring Review
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Visit Exceptions Requiring Review
+            </h2>
+            <DemoBadge size="sm" />
+          </div>
           <Button
             variant="outline"
             size="sm"

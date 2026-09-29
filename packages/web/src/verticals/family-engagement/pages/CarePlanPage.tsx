@@ -10,6 +10,7 @@ import { useFamilyDashboard } from '../hooks';
 import { useAuth } from '@/core/hooks';
 import { CarePlanSummary, CareTeam } from '../components';
 import { ClipboardList, Users } from 'lucide-react';
+import { DemoBadge } from '@folkcare/shared-components';
 import type { UUID } from '@folkcare/core/browser';
 
 export const CarePlanPage: React.FC = () => {
@@ -145,6 +146,7 @@ export const CarePlanPage: React.FC = () => {
           <div className="flex items-center gap-2 mb-4">
             <ClipboardList className="h-6 w-6 text-primary-600" />
             <h2 className="text-2xl font-semibold text-gray-900">Progress Report</h2>
+            <DemoBadge size="sm" />
           </div>
           <CarePlanSummary report={mockCarePlanReport} loading={false} />
         </div>
@@ -167,6 +169,7 @@ export const CarePlanPage: React.FC = () => {
         <div className="flex items-center gap-2 mb-4">
           <Users className="h-6 w-6 text-primary-600" />
           <h2 className="text-2xl font-semibold text-gray-900">Care Team</h2>
+          <DemoBadge size="sm" />
         </div>
         <CareTeam members={mockCareTeam} loading={false} />
       </div>
