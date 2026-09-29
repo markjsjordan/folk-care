@@ -55,12 +55,20 @@ export interface CaregiverListItem {
   id: string;
   employeeNumber: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
+  preferredName?: string;
   email: string;
+  primaryPhone: {
+    number: string;
+    type: 'MOBILE' | 'HOME' | 'WORK';
+    canReceiveSMS: boolean;
+  };
   role: string;
   status: string;
   complianceStatus: string;
   employmentType: string;
+  hireDate: Date;
   isDemoData?: boolean;
 }
 

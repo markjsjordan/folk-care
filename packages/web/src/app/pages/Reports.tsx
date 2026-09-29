@@ -36,7 +36,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { Card, Button, LoadingSpinner, ErrorMessage, Badge } from '@/core/components';
+import { Card, Button, LoadingSpinner, ErrorMessage, Badge, DemoBadge } from '@/core/components';
 import {
   useOperationalKPIs,
   useRevenueTrends,
@@ -165,7 +165,10 @@ export function ReportsPage() {
       <div className="mb-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
+              <DemoBadge />
+            </div>
             <p className="mt-1 text-sm text-gray-600">
               Comprehensive administrator reports with export capabilities
             </p>

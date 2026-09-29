@@ -1,2 +1,2 @@
-// Placeholder for caregiver components
-// Will be expanded with CaregiverCard, CaregiverForm, etc.
+export { CaregiverCard, type CaregiverCardProps } from './CaregiverCard.js';
+export { CaregiverSearch, type CaregiverSearchProps } from './CaregiverSearch.js';
