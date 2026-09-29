@@ -3,18 +3,34 @@
  */
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus } from 'lucide-react';
-import { Button, LoadingSpinner, EmptyState, ErrorMessage, Card, Badge, DemoBadge } from '@/core/components/index.js';
-import { usePermissions } from '@/core/hooks/index.js';
+import { Link, useNavigate } from 'react-router-dom';
+import { Plus, Grid, List, Users, Sparkles } from 'lucide-react';
+import { 
+  Button, 
+  LoadingSpinner, 
+  EmptyState, 
+  ErrorMessage,
+  DemoDataBanner 
+} from '@/core/components/index.js';
+import { usePermissions, useDemoData } from '@/core/hooks/index.js';
 import { useCaregivers } from '../hooks/index.js';
+import { CaregiverCard, CaregiverSearch } from '../components/index.js';
 import type { CaregiverSearchFilters } from '../types/index.js';
 
 export const CaregiverList: React.FC = () => {
+  const navigate = useNavigate();
   const { can } = usePermissions();
   const [filters, setFilters] = useState<CaregiverSearchFilters>({});
-  const [page] = useState(1);
-  const { data, isLoading, error, refetch } = useCaregivers(filters, page);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const { data, isLoading, error, refetch } = useCaregivers(filters);
+  const {
+    hasDemoData,
+    isSeeding,
+    isClearing,
+    seedDemoData,
+    clearDemoData,
+    stats,
+  } = useDemoData();
 
   if (isLoading) {
     return (
@@ -33,7 +49,7 @@ export const CaregiverList: React.FC = () => {
     );
   }
 
-  const caregivers = data?.items ?? [];
+  const caregivers = data?.items || [];
 
   return (
     <div className="space-y-6">
@@ -41,74 +57,120 @@ export const CaregiverList: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Caregivers</h1>
           <p className="text-gray-600 mt-1">
-            {data?.total ?? 0} total caregivers
+            {data?.total || 0} total caregivers
           </p>
         </div>
-        {can('caregivers:write') && (
-          <Link to="/caregivers/new">
-            <Button leftIcon={<Plus className="h-4 w-4" />}>
-              New Caregiver
-            </Button>
-          </Link>
-        )}
+        <div className="flex gap-2">
+          <div className="flex border border-gray-300 rounded-md">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 ${
+                viewMode === 'grid' ? 'bg-gray-100' : 'hover:bg-gray-50'
+              }`}
+              title="Grid view"
+            >
+              <Grid className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 ${
+                viewMode === 'list' ? 'bg-gray-100' : 'hover:bg-gray-50'
+              }`}
+              title="List view"
+            >
+              <List className="h-5 w-5" />
+            </button>
+          </div>
+          {can('caregivers:write') && (
+            <Link to="/caregivers/new">
+              <Button leftIcon={<Plus className="h-4 w-4" />}>
+                New Caregiver
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
 
-      {/* Search/Filter section would go here */}
-      <Card>
-        <div className="px-6 py-4">
-          <input
-            type="text"
-            placeholder="Search caregivers..."
-            className="w-full px-3 py-2 border rounded-lg"
-            value={filters.query ?? ''}
-            onChange={(e) => setFilters({ ...filters, query: e.target.value })}
-          />
-        </div>
-      </Card>
+      {/* Demo Data Banner */}
+      {hasDemoData && (
+        <DemoDataBanner
+          onClearDemo={clearDemoData}
+          onAddRealData={() => navigate('/caregivers/new')}
+          isClearing={isClearing}
+          stats={stats || undefined}
+        />
+      )}
+
+      <CaregiverSearch filters={filters} onFiltersChange={setFilters} />
 
       {caregivers.length === 0 ? (
         <EmptyState
           title="No caregivers found"
-          description="Get started by adding your first caregiver."
+          description={
+            !hasDemoData
+              ? "Get started by loading sample data to explore the platform, or add your first caregiver."
+              : "Get started by creating your first caregiver."
+          }
+          icon={<Users />}
+          size="lg"
           action={
-            can('caregivers:write') ? (
-              <Link to="/caregivers/new">
-                <Button leftIcon={<Plus className="h-4 w-4" />}>
+            !hasDemoData ? (
+              <Button
+                variant="primary"
+                size="lg"
+                leftIcon={<Sparkles className="h-4 w-4" />}
+                onClick={() => void seedDemoData()}
+                isLoading={isSeeding}
+              >
+                Load Sample Data
+              </Button>
+            ) : (
+              can('caregivers:write') && (
+                <Button
+                  variant="primary"
+                  size="lg"
+                  leftIcon={<Plus className="h-4 w-4" />}
+                  onClick={() => navigate('/caregivers/new')}
+                >
                   Add Caregiver
                 </Button>
-              </Link>
-            ) : undefined
+              )
+            )
+          }
+          secondaryAction={
+            !hasDemoData && can('caregivers:write') ? (
+              <Button
+                variant="outline"
+                size="lg"
+                leftIcon={<Plus className="h-4 w-4" />}
+                onClick={() => navigate('/caregivers/new')}
+              >
+                Add Caregiver
+              </Button>
+            ) : null
           }
         />
       ) : (
-        <div className="space-y-4">
-          {caregivers.map((caregiver: { id: string; firstName: string; lastName: string; employeeNumber: string; role: string; status: string; complianceStatus: string; isDemoData?: boolean }) => (
-            <Link key={caregiver.id} to={`/caregivers/${caregiver.id}`}>
-              <Card className="hover:shadow-md transition-shadow">
-                <div className="px-6 py-4">
-                  <div className="flex justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">
-                        {caregiver.firstName} {caregiver.lastName}
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        {caregiver.employeeNumber} • {caregiver.role}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      {caregiver.isDemoData && <DemoBadge />}
-                      <Badge variant={caregiver.status === 'ACTIVE' ? 'success' : 'default'}>
-                        {caregiver.status}
-                      </Badge>
-                      <Badge variant={caregiver.complianceStatus === 'COMPLIANT' ? 'success' : 'warning'}>
-                        {caregiver.complianceStatus}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </Link>
+        <div
+          className={
+            viewMode === 'grid'
+              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
+              : 'space-y-4'
+          }
+        >
+          {caregivers.map((caregiver) => (
+            <CaregiverCard
+              key={caregiver.id}
+              caregiver={caregiver}
+              compact={viewMode === 'list'}
+            />
           ))}
+        </div>
+      )}
+
+      {data && data.totalPages > 1 && (
+        <div className="flex justify-center">
+          <Button variant="outline">Load More</Button>
         </div>
       )}
     </div>

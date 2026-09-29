@@ -104,7 +104,6 @@ export default function BulkNotificationsPage() {
   const [message, setMessage] = useState('');
   const [urgency, setUrgency] = useState<UrgencyLevel>('normal');
   const [filterClient, setFilterClient] = useState('');
-  const [showSuccess, setShowSuccess] = useState(false);
 
   const selectedCount = caregivers.filter(cg => cg.selected).length;
   const allClients = Array.from(
@@ -152,25 +151,13 @@ export default function BulkNotificationsPage() {
       return;
     }
 
-    // Send notification to API endpoint
-    console.log('Sending notification:', {
-      recipients: caregivers.filter(cg => cg.selected).map(cg => cg.id),
-      message,
-      urgency,
-      timestamp: new Date().toISOString(),
-    });
-
-    // Show success
-    setShowSuccess(true);
-    setTimeout(() => {
-      setShowSuccess(false);
-      // Reset form
-      setCaregivers(caregivers.map(cg => ({ ...cg, selected: false })));
-      setMessage('');
-      setSelectedTemplate(null);
-      setUrgency('normal');
-      setFilterClient('');
-    }, 3000);
+    // FEATURE COMING SOON: Bulk notification API integration not yet implemented
+    // This handler is disabled pending:
+    // 1. Backend API endpoint for /api/notifications/bulk-send
+    // 2. Multi-channel delivery (push, SMS, email) integration
+    // 3. Delivery tracking and retry logic
+    // 4. Emergency alert phone call escalation
+    alert('⏳ Bulk Notifications feature is coming soon.\n\nWe are currently building the backend API to support multi-channel delivery (push notifications, SMS, and email) with delivery tracking.');
   };
 
   const getUrgencyColor = (level: UrgencyLevel) => {
@@ -209,19 +196,6 @@ export default function BulkNotificationsPage() {
           </p>
         </div>
       </div>
-
-      {showSuccess && (
-        <div style={styles.successBanner}>
-          <div style={styles.successIcon}>✓</div>
-          <div>
-            <div style={styles.successTitle}>Notification Sent!</div>
-            <div style={styles.successText}>
-              Message delivered to {selectedCount} caregiver{selectedCount !== 1 ? 's' : ''} via
-              push notification, SMS, and email.
-            </div>
-          </div>
-        </div>
-      )}
 
       <div style={styles.content}>
         {/* Left column: Recipients */}

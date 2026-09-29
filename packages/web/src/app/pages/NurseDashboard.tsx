@@ -11,7 +11,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/core/hooks';
-import { Card, CardHeader, CardContent, Button, EmptyState } from '@/core/components';
+import { Card, CardHeader, CardContent, Button, EmptyState, DemoBadge } from '@/core/components';
 import {
   Calendar,
   ClipboardList,
@@ -407,6 +407,7 @@ export const NurseDashboard: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900">
               Supervision Visits Due This Month
             </h2>
+            <DemoBadge size="sm" />
           </div>
           <Button
             variant="outline"
@@ -440,9 +441,12 @@ export const NurseDashboard: React.FC = () => {
         {/* Care Plan Reviews */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Care Plans Requiring Review
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Care Plans Requiring Review
+              </h2>
+              <DemoBadge size="sm" />
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -461,9 +465,12 @@ export const NurseDashboard: React.FC = () => {
         {/* Medication Changes */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Medication Changes Requiring Approval
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Medication Changes Requiring Approval
+              </h2>
+              <DemoBadge size="sm" />
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -498,7 +505,7 @@ export const NurseDashboard: React.FC = () => {
             <Button
               variant="outline"
               className="justify-start"
-              onClick={() => navigate('/supervision-visits/schedule')}
+              onClick={() => navigate('/scheduling')}
             >
               <Calendar className="h-5 w-5 mr-2" />
               Schedule Supervision Visit
@@ -506,7 +513,7 @@ export const NurseDashboard: React.FC = () => {
             <Button
               variant="outline"
               className="justify-start"
-              onClick={() => navigate('/care-plans/create')}
+              onClick={() => navigate('/care-plans/new')}
             >
               <ClipboardList className="h-5 w-5 mr-2" />
               Create Care Plan
@@ -522,7 +529,7 @@ export const NurseDashboard: React.FC = () => {
             <Button
               variant="outline"
               className="justify-start"
-              onClick={() => navigate('/reports/clinical')}
+              onClick={() => navigate('/analytics/reports')}
             >
               <FileText className="h-5 w-5 mr-2" />
               Clinical Reports
