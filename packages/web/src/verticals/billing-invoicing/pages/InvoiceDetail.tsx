@@ -175,7 +175,7 @@ export const InvoiceDetail: React.FC = () => {
                     {new Date(item.serviceDate).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    {item.units} {item.unitType.toLowerCase()}
+                    {item.units} {item.unitType?.toLowerCase() ?? 'units'}
                   </td>
                   <td className="px-4 py-3 text-right">{formatCurrency(item.unitRate)}</td>
                   <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.total)}</td>
