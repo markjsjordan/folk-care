@@ -47,9 +47,9 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
-    "@typescript-eslint/eslint-plugin": "^8.46.4",
-    "@typescript-eslint/parser": "^8.46.4",
-    "tsc-alias": "^1.8.16",
+    "@typescript-eslint/eslint-plugin": "^8.70.1",
+    "@typescript-eslint/parser": "^8.70.1",
+    "tsc-alias": "^1.9.5",
     "typescript": "^5.9.3",
     "vitest": "^4.0.8"
   }
