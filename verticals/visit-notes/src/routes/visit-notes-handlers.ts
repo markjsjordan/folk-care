@@ -63,7 +63,7 @@ export function createVisitNotesHandlers(
           res.status(400).json({
             success: false,
             error: 'Validation error',
-            details: error.errors,
+            details: error.issues,
           });
           return;
         }
@@ -91,7 +91,7 @@ export function createVisitNotesHandlers(
           res.status(400).json({
             success: false,
             error: 'Validation error',
-            details: error.errors,
+            details: error.issues,
           });
           return;
         }

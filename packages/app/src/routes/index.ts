@@ -12,6 +12,8 @@ import { createCarePlanHandlers } from '@folkcare/care-plans-tasks';
 import { createTaskPrioritizationRoutes, createNaturalLanguageCarePlanRoutes, createCarePlanEffectivenessRoutes } from '@folkcare/care-plans-tasks';
 import { createOptimalVisitFrequencyRoutes } from '@folkcare/scheduling-visits';
 import { createTrainingRecommendationRoutes } from '@folkcare/caregiver-staff';
+import { createBurnoutRoutes } from '@folkcare/caregiver-burnout-prediction';
+import { createAIRoutes } from '@folkcare/ai-services';
 import { createHealthRouter } from './health';
 import { createMetricsRouter } from './metrics';
 import { createAuthRouter } from './auth';
@@ -359,7 +361,6 @@ export async function setupRoutes(app: Express, db: Database): Promise<void> {
   const authMiddleware2 = new AuthMiddleware(db);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   burnoutRouter.use(authMiddleware2.requireAuth as any);
-  const { createBurnoutRoutes } = await import('@folkcare/caregiver-burnout-prediction');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createBurnoutRoutes(burnoutRouter as any, db);
   app.use('/api', generalApiLimiter, burnoutRouter);
@@ -426,7 +427,6 @@ export async function setupRoutes(app: Express, db: Database): Promise<void> {
   console.log('  ✓ Data Export routes registered (with rate limiting)');
 
   // AI Services routes (note summarization, sentiment analysis)
-  const { createAIRoutes } = await import('@folkcare/ai-services');
   const aiRouter = createAIRoutes(db);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.use('/api', generalApiLimiter, aiRouter as any);

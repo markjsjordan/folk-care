@@ -61,7 +61,7 @@ export const CreateWebhookSchema = z.object({
   url: z.string().url(),
   events: z.array(z.string()).min(1),
   description: z.string().max(500).optional(),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   retryPolicy: z
     .object({
       maxRetries: z.number().int().min(0).max(10).default(3),
