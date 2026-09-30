@@ -584,3 +584,1667 @@ export interface FamilyMemberProfile extends FamilyMember {
     lastActivityDate?: Timestamp;
   };
 }
+
+// ============================================================================
+// Satisfaction Survey Types
+// ============================================================================
+
+/**
+ * Type of survey
+ */
+export type SurveyType =
+  | 'SATISFACTION' // General satisfaction survey
+  | 'NPS' // Net Promoter Score survey
+  | 'CARE_QUALITY' // Care quality feedback
+  | 'CAREGIVER_FEEDBACK' // Feedback about specific caregivers
+  | 'CUSTOM'; // Custom survey
+
+/**
+ * Survey template status
+ */
+export type SurveyStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+
+/**
+ * Survey trigger type
+ */
+export type SurveyTriggerType =
+  | 'MANUAL' // Manually sent
+  | 'SCHEDULED' // Sent on a schedule
+  | 'AFTER_VISIT' // Sent after a visit
+  | 'AFTER_MILESTONE' // Sent after care plan milestone
+  | 'AFTER_CARE_PLAN_UPDATE'; // Sent after care plan updates
+
+/**
+ * Survey schedule frequency
+ */
+export type SurveyFrequency = 'WEEKLY' | 'MONTHLY' | 'QUARTERLY';
+
+/**
+ * Question type in a survey
+ */
+export type SurveyQuestionType =
+  | 'RATING' // 1-5 star rating
+  | 'MULTIPLE_CHOICE' // Select one or more options
+  | 'TEXT' // Free text response
+  | 'NPS' // Net Promoter Score (0-10)
+  | 'YES_NO' // Yes/No question
+  | 'SCALE'; // Numeric scale
+
+/**
+ * Survey invitation status
+ */
+export type SurveyInvitationStatus =
+  | 'PENDING' // Not yet sent
+  | 'SENT' // Sent to family member
+  | 'OPENED' // Family member opened the survey
+  | 'STARTED' // Started answering
+  | 'COMPLETED' // Completed
+  | 'EXPIRED' // Survey expired
+  | 'DECLINED'; // Family member declined
+
+/**
+ * Survey response status
+ */
+export type SurveyResponseStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED';
+
+/**
+ * Survey template definition
+ */
+export interface SurveyTemplate extends Entity {
+  name: string;
+  description?: string;
+  surveyType: SurveyType;
+  status: SurveyStatus;
+
+  // Configuration
+  estimatedMinutes: number;
+  allowAnonymous: boolean;
+  isRequired: boolean;
+  minDaysBetweenSurveys: number;
+
+  // Scheduling
+  triggerType: SurveyTriggerType;
+  triggerDaysAfterEvent?: number;
+  scheduleFrequency?: SurveyFrequency;
+  scheduleDayOfWeek?: number;
+  scheduleDayOfMonth?: number;
+
+  // Display
+  welcomeMessage?: string;
+  thankYouMessage?: string;
+  logoUrl?: string;
+
+  organizationId: UUID;
+}
+
+/**
+ * Question within a survey template
+ */
+export interface SurveyQuestion extends Entity {
+  surveyTemplateId: UUID;
+  orderIndex: number;
+  questionType: SurveyQuestionType;
+  questionText: string;
+  helpText?: string;
+
+  // Configuration
+  isRequired: boolean;
+  options?: string[]; // For MULTIPLE_CHOICE
+  minValue?: number; // For RATING, SCALE, NPS
+  maxValue?: number;
+  minLabel?: string;
+  maxLabel?: string;
+
+  // Conditional logic
+  conditionalOnQuestionId?: UUID;
+  conditionalOperator?: 'EQUALS' | 'NOT_EQUALS' | 'GREATER_THAN' | 'LESS_THAN';
+  conditionalValue?: string;
+
+  // Categorization
+  category?: string;
+}
+
+/**
+ * Survey invitation sent to family member
+ */
+export interface SurveyInvitation extends Entity {
+  surveyTemplateId: UUID;
+  familyMemberId: UUID;
+  clientId: UUID;
+
+  status: SurveyInvitationStatus;
+  invitationCode: string;
+
+  // Scheduling
+  scheduledSendAt?: Timestamp;
+  sentAt?: Timestamp;
+  expiresAt: Timestamp;
+
+  // Trigger context
+  triggerType: SurveyTriggerType;
+  triggerEntityId?: UUID;
+  triggerEntityType?: string;
+
+  // Response tracking
+  openedAt?: Timestamp;
+  startedAt?: Timestamp;
+  completedAt?: Timestamp;
+  declinedAt?: Timestamp;
+  declineReason?: string;
+
+  // Reminders
+  reminderCount: number;
+  lastReminderAt?: Timestamp;
+
+  organizationId: UUID;
+}
+
+/**
+ * Family member response to a survey
+ */
+export interface SurveyResponse extends Entity {
+  surveyInvitationId: UUID;
+  surveyTemplateId: UUID;
+  familyMemberId?: UUID; // Null if anonymous
+  clientId: UUID;
+
+  isAnonymous: boolean;
+  status: SurveyResponseStatus;
+  completionPercentage: number;
+
+  // Timing
+  startedAt: Timestamp;
+  completedAt?: Timestamp;
+  timeSpentSeconds?: number;
+
+  // Calculated scores
+  overallSatisfactionScore?: number;
+  npsScore?: number;
+  categoryScores?: Record<string, number>;
+
+  // Device info
+  deviceType?: 'DESKTOP' | 'MOBILE' | 'TABLET';
+  browser?: string;
+
+  organizationId: UUID;
+}
+
+/**
+ * Individual answer to a survey question
+ */
+export interface SurveyResponseAnswer {
+  id: UUID;
+  surveyResponseId: UUID;
+  surveyQuestionId: UUID;
+
+  ratingValue?: number;
+  textValue?: string;
+  selectedOptions?: number[];
+
+  timeSpentSeconds?: number;
+  answeredAt: Timestamp;
+  wasSkipped: boolean;
+
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/**
+ * Aggregated survey analytics
+ */
+export interface SurveyAnalytics {
+  id: UUID;
+  surveyTemplateId: UUID;
+  periodDate: string;
+  periodType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+
+  // Response metrics
+  invitationsSent: number;
+  invitationsOpened: number;
+  responsesStarted: number;
+  responsesCompleted: number;
+  responsesAbandoned: number;
+  completionRate?: number;
+
+  // Score metrics
+  avgSatisfactionScore?: number;
+  avgNpsScore?: number;
+  avgCategoryScores?: Record<string, number>;
+
+  // Timing
+  avgTimeSpentSeconds?: number;
+
+  organizationId: UUID;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// ============================================================================
+// Survey Service Input/Output Types
+// ============================================================================
+
+/**
+ * Input for creating a survey template
+ */
+export interface CreateSurveyTemplateInput {
+  name: string;
+  description?: string;
+  surveyType: SurveyType;
+  estimatedMinutes?: number;
+  allowAnonymous?: boolean;
+  isRequired?: boolean;
+  minDaysBetweenSurveys?: number;
+  triggerType: SurveyTriggerType;
+  triggerDaysAfterEvent?: number;
+  scheduleFrequency?: SurveyFrequency;
+  scheduleDayOfWeek?: number;
+  scheduleDayOfMonth?: number;
+  welcomeMessage?: string;
+  thankYouMessage?: string;
+  logoUrl?: string;
+}
+
+/**
+ * Input for updating a survey template
+ */
+export interface UpdateSurveyTemplateInput {
+  name?: string;
+  description?: string;
+  status?: SurveyStatus;
+  estimatedMinutes?: number;
+  allowAnonymous?: boolean;
+  isRequired?: boolean;
+  minDaysBetweenSurveys?: number;
+  triggerType?: SurveyTriggerType;
+  triggerDaysAfterEvent?: number;
+  scheduleFrequency?: SurveyFrequency;
+  scheduleDayOfWeek?: number;
+  scheduleDayOfMonth?: number;
+  welcomeMessage?: string;
+  thankYouMessage?: string;
+  logoUrl?: string;
+}
+
+/**
+ * Input for creating a survey question
+ */
+export interface CreateSurveyQuestionInput {
+  surveyTemplateId: UUID;
+  orderIndex: number;
+  questionType: SurveyQuestionType;
+  questionText: string;
+  helpText?: string;
+  isRequired?: boolean;
+  options?: string[];
+  minValue?: number;
+  maxValue?: number;
+  minLabel?: string;
+  maxLabel?: string;
+  conditionalOnQuestionId?: UUID;
+  conditionalOperator?: 'EQUALS' | 'NOT_EQUALS' | 'GREATER_THAN' | 'LESS_THAN';
+  conditionalValue?: string;
+  category?: string;
+}
+
+/**
+ * Input for sending a survey invitation
+ */
+export interface SendSurveyInvitationInput {
+  surveyTemplateId: UUID;
+  familyMemberId: UUID;
+  clientId: UUID;
+  scheduledSendAt?: Timestamp;
+  expiresAt?: Timestamp;
+  triggerEntityId?: UUID;
+  triggerEntityType?: string;
+}
+
+/**
+ * Input for submitting a survey answer
+ */
+export interface SubmitSurveyAnswerInput {
+  surveyResponseId: UUID;
+  surveyQuestionId: UUID;
+  ratingValue?: number;
+  textValue?: string;
+  selectedOptions?: number[];
+  wasSkipped?: boolean;
+  timeSpentSeconds?: number;
+}
+
+/**
+ * Summary of survey results for reporting
+ */
+export interface SurveySummary {
+  templateId: UUID;
+  templateName: string;
+  surveyType: SurveyType;
+  totalResponses: number;
+  completedResponses: number;
+  avgCompletionTime: number;
+  avgSatisfactionScore?: number;
+  npsScore?: number;
+  responseRate: number;
+  recentTrend: 'UP' | 'DOWN' | 'STABLE';
+}
+
+// ============================================================================
+// Billing Transparency Types
+// ============================================================================
+
+/**
+ * Payer type for billing
+ */
+export type BillingPayerType =
+  | 'MEDICAID'
+  | 'MEDICARE'
+  | 'PRIVATE_INSURANCE'
+  | 'PRIVATE_PAY'
+  | 'VETERANS_BENEFITS'
+  | 'OTHER';
+
+/**
+ * Family-visible invoice status
+ */
+export type FamilyInvoiceStatus =
+  | 'PENDING' // Invoice created, awaiting approval
+  | 'SENT' // Invoice sent to payer
+  | 'PROCESSING' // Being processed by payer
+  | 'PARTIALLY_PAID' // Some payment received
+  | 'PAID' // Fully paid
+  | 'PAST_DUE' // Payment overdue
+  | 'DISPUTED'; // Under dispute
+
+/**
+ * Payment method
+ */
+export type PaymentMethodType =
+  | 'CHECK'
+  | 'CREDIT_CARD'
+  | 'DEBIT_CARD'
+  | 'ACH'
+  | 'CASH'
+  | 'INSURANCE'
+  | 'OTHER';
+
+/**
+ * Unit type for services
+ */
+export type ServiceUnitType =
+  | 'HOUR'
+  | 'VISIT'
+  | 'DAY'
+  | 'WEEK'
+  | 'MONTH'
+  | 'TASK'
+  | 'MILE'
+  | 'UNIT';
+
+/**
+ * Family-friendly invoice line item
+ */
+export interface FamilyInvoiceLineItem {
+  id: UUID;
+  serviceDate: string; // YYYY-MM-DD
+  serviceDescription: string;
+  caregiverName: string;
+  unitType: ServiceUnitType;
+  units: number;
+  unitRate: number;
+  subtotal: number;
+  adjustments: number;
+  total: number;
+  notes?: string;
+}
+
+/**
+ * Family-visible invoice summary
+ * Clear, understandable billing with line-item detail
+ */
+export interface FamilyInvoiceSummary {
+  id: UUID;
+  invoiceNumber: string;
+  invoiceDate: string; // YYYY-MM-DD
+  dueDate: string; // YYYY-MM-DD
+
+  // Payer information
+  payerType: BillingPayerType;
+  payerName: string;
+
+  // Line items for transparency
+  lineItems: FamilyInvoiceLineItem[];
+
+  // Totals breakdown (no surprise charges)
+  subtotal: number;
+  taxAmount: number;
+  discountAmount: number;
+  adjustmentAmount: number;
+  adjustmentDescription?: string;
+  totalAmount: number;
+
+  // Payment status
+  paidAmount: number;
+  balanceDue: number;
+  status: FamilyInvoiceStatus;
+
+  // Service period covered
+  servicePeriodStart: string; // YYYY-MM-DD
+  servicePeriodEnd: string; // YYYY-MM-DD
+
+  // Client info
+  clientId: UUID;
+  clientName: string;
+
+  organizationId: UUID;
+}
+
+/**
+ * Payment record visible to family
+ */
+export interface FamilyPaymentRecord {
+  id: UUID;
+  paymentDate: string; // YYYY-MM-DD
+  amount: number;
+  paymentMethod: PaymentMethodType;
+  payerName: string;
+  invoiceNumber?: string;
+  invoiceId?: UUID;
+  confirmationNumber?: string;
+  status: 'RECEIVED' | 'APPLIED' | 'PENDING' | 'RETURNED';
+  notes?: string;
+}
+
+/**
+ * Billing statement for family (monthly summary)
+ */
+export interface FamilyBillingStatement {
+  statementId: UUID;
+  statementDate: string; // YYYY-MM-DD
+  statementPeriodStart: string; // YYYY-MM-DD
+  statementPeriodEnd: string; // YYYY-MM-DD
+
+  // Client info
+  clientId: UUID;
+  clientName: string;
+
+  // Opening balance
+  previousBalance: number;
+
+  // Activity during period
+  newCharges: number;
+  paymentsReceived: number;
+  adjustments: number;
+  adjustmentDescription?: string;
+
+  // Closing balance
+  currentBalance: number;
+
+  // Breakdown by service type
+  chargesByService: FamilyServiceChargeBreakdown[];
+
+  // Invoice references
+  invoicesIncluded: FamilyInvoiceSummary[];
+
+  // Payment history
+  paymentsIncluded: FamilyPaymentRecord[];
+
+  // Aging information
+  aging: FamilyBalanceAging;
+
+  organizationId: UUID;
+}
+
+/**
+ * Charge breakdown by service type
+ */
+export interface FamilyServiceChargeBreakdown {
+  serviceType: string;
+  serviceDescription: string;
+  totalHours?: number;
+  totalUnits: number;
+  unitType: ServiceUnitType;
+  averageRate: number;
+  totalAmount: number;
+}
+
+/**
+ * Balance aging for family view
+ */
+export interface FamilyBalanceAging {
+  current: number; // 0-30 days
+  days31to60: number;
+  days61to90: number;
+  over90Days: number;
+  totalPastDue: number;
+}
+
+/**
+ * Authorization status visible to family
+ */
+export interface FamilyAuthorizationStatus {
+  id: UUID;
+  authorizationNumber: string;
+  payerName: string;
+  serviceType: string;
+  serviceDescription: string;
+
+  // Authorization period
+  effectiveFrom: string; // YYYY-MM-DD
+  effectiveTo: string; // YYYY-MM-DD
+
+  // Units tracking
+  authorizedUnits: number;
+  usedUnits: number;
+  remainingUnits: number;
+  unitType: ServiceUnitType;
+
+  // Status
+  status: 'ACTIVE' | 'EXPIRING_SOON' | 'DEPLETED' | 'EXPIRED';
+  percentUsed: number;
+  daysRemaining: number;
+
+  // Alerts
+  alerts: FamilyAuthorizationAlert[];
+}
+
+/**
+ * Alert for authorization
+ */
+export interface FamilyAuthorizationAlert {
+  alertType: 'UNITS_LOW' | 'EXPIRING_SOON' | 'EXPIRED' | 'RENEWAL_NEEDED';
+  message: string;
+  severity: 'INFO' | 'WARNING' | 'URGENT';
+}
+
+/**
+ * Billing dashboard for family
+ */
+export interface FamilyBillingDashboard {
+  clientId: UUID;
+  clientName: string;
+
+  // Current balance summary
+  currentBalance: number;
+  pastDueBalance: number;
+  nextPaymentDueDate?: string;
+  nextPaymentAmount?: number;
+
+  // Recent activity
+  recentInvoices: FamilyInvoiceSummary[];
+  recentPayments: FamilyPaymentRecord[];
+
+  // Authorization status
+  authorizations: FamilyAuthorizationStatus[];
+  authorizationAlerts: FamilyAuthorizationAlert[];
+
+  // Year-to-date summary
+  ytdTotalCharges: number;
+  ytdTotalPayments: number;
+  ytdInsurancePaid: number;
+  ytdClientResponsibility: number;
+
+  // Payment options
+  acceptedPaymentMethods: PaymentMethodType[];
+  paymentPortalUrl?: string;
+  paymentInstructions?: string;
+
+  organizationId: UUID;
+  lastUpdated: Timestamp;
+}
+
+/**
+ * Input for querying family billing
+ */
+export interface FamilyBillingQueryInput {
+  clientId: UUID;
+  familyMemberId: UUID;
+  startDate?: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD
+  status?: FamilyInvoiceStatus[];
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Billing notification preferences for family
+ */
+export interface FamilyBillingNotificationPreferences {
+  invoiceReadyNotifications: boolean;
+  paymentReceivedNotifications: boolean;
+  paymentDueReminders: boolean;
+  paymentPastDueAlerts: boolean;
+  authorizationExpiringAlerts: boolean;
+  statementReadyNotifications: boolean;
+  reminderDaysBeforeDue: number;
+}
+
+// ============================================================================
+// Invoice History & Download Types
+// ============================================================================
+
+/**
+ * Document format for downloads
+ */
+export type DocumentFormat = 'PDF' | 'CSV' | 'EXCEL';
+
+/**
+ * Download status
+ */
+export type DownloadStatus = 'PENDING' | 'GENERATING' | 'READY' | 'EXPIRED' | 'FAILED';
+
+/**
+ * Invoice history entry with download info
+ */
+export interface FamilyInvoiceHistoryEntry extends FamilyInvoiceSummary {
+  /** Whether PDF is available for download */
+  pdfAvailable: boolean;
+  /** Download URL if available */
+  downloadUrl?: string;
+  /** Download expiry time */
+  downloadExpiresAt?: Timestamp;
+  /** Date when invoice was first viewed by family */
+  viewedAt?: Timestamp;
+  /** Date when PDF was downloaded */
+  downloadedAt?: Timestamp;
+}
+
+/**
+ * Paginated invoice history response
+ */
+export interface FamilyInvoiceHistoryResponse {
+  invoices: FamilyInvoiceHistoryEntry[];
+  pagination: {
+    totalCount: number;
+    totalPages: number;
+    currentPage: number;
+    pageSize: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+  /** Year-to-date summary */
+  summary: {
+    totalInvoices: number;
+    totalAmount: number;
+    paidAmount: number;
+    pendingAmount: number;
+    overdueAmount: number;
+  };
+}
+
+/**
+ * Invoice download request
+ */
+export interface InvoiceDownloadRequest {
+  invoiceId: UUID;
+  familyMemberId: UUID;
+  clientId: UUID;
+  format: DocumentFormat;
+}
+
+/**
+ * Invoice download response
+ */
+export interface InvoiceDownloadResponse {
+  invoiceId: UUID;
+  downloadUrl: string;
+  expiresAt: Timestamp;
+  format: DocumentFormat;
+  fileName: string;
+  fileSizeBytes: number;
+  status: DownloadStatus;
+}
+
+/**
+ * Bulk invoice download request
+ */
+export interface BulkInvoiceDownloadRequest {
+  invoiceIds: UUID[];
+  familyMemberId: UUID;
+  clientId: UUID;
+  format: DocumentFormat;
+  /** Combine into single file or zip archive */
+  combineIntoSingle?: boolean;
+}
+
+/**
+ * Bulk download response
+ */
+export interface BulkInvoiceDownloadResponse {
+  downloadUrl: string;
+  expiresAt: Timestamp;
+  format: DocumentFormat;
+  fileName: string;
+  fileSizeBytes: number;
+  status: DownloadStatus;
+  invoiceCount: number;
+}
+
+/**
+ * Statement download request
+ */
+export interface StatementDownloadRequest {
+  familyMemberId: UUID;
+  clientId: UUID;
+  periodStart: string; // YYYY-MM-DD
+  periodEnd: string; // YYYY-MM-DD
+  format: DocumentFormat;
+}
+
+/**
+ * Statement download response
+ */
+export interface StatementDownloadResponse {
+  downloadUrl: string;
+  expiresAt: Timestamp;
+  format: DocumentFormat;
+  fileName: string;
+  fileSizeBytes: number;
+  status: DownloadStatus;
+  periodStart: string;
+  periodEnd: string;
+}
+
+/**
+ * Invoice PDF content data
+ */
+export interface InvoicePDFData {
+  invoice: FamilyInvoiceSummary;
+  organizationInfo: {
+    name: string;
+    address: string;
+    phone: string;
+    email: string;
+    taxId?: string;
+    logo?: string;
+  };
+  clientInfo: {
+    name: string;
+    address?: string;
+  };
+  paymentInstructions?: string;
+  footerText?: string;
+}
+
+// ============================================================================
+// Agency Contact Information Types
+// ============================================================================
+
+/**
+ * Day of week for business hours
+ */
+export type DayOfWeek =
+  | 'MONDAY'
+  | 'TUESDAY'
+  | 'WEDNESDAY'
+  | 'THURSDAY'
+  | 'FRIDAY'
+  | 'SATURDAY'
+  | 'SUNDAY';
+
+/**
+ * Contact type for staff
+ */
+export type AgencyContactType =
+  | 'MAIN_OFFICE'
+  | 'BILLING'
+  | 'SCHEDULING'
+  | 'CARE_COORDINATION'
+  | 'EMERGENCY'
+  | 'AFTER_HOURS'
+  | 'NURSE_LINE'
+  | 'SOCIAL_WORKER';
+
+/**
+ * Business hours for a specific day
+ */
+export interface BusinessHours {
+  dayOfWeek: DayOfWeek;
+  isOpen: boolean;
+  openTime?: string; // HH:mm format
+  closeTime?: string; // HH:mm format
+  notes?: string; // e.g., "Closed for lunch 12-1pm"
+}
+
+/**
+ * Holiday closure or special hours
+ */
+export interface HolidaySchedule {
+  date: string; // YYYY-MM-DD
+  name: string; // e.g., "Christmas Day"
+  isClosed: boolean;
+  specialHours?: {
+    openTime: string;
+    closeTime: string;
+  };
+  notes?: string;
+}
+
+/**
+ * Agency contact person or department
+ */
+export interface AgencyContact {
+  id: UUID;
+  contactType: AgencyContactType;
+  displayName: string;
+  description?: string;
+  phoneNumber: string;
+  phoneExtension?: string;
+  email?: string;
+  isAvailable24Hours: boolean;
+  availableHours?: BusinessHours[];
+  isPrimaryContact: boolean;
+  sortOrder: number;
+}
+
+/**
+ * Full agency contact information for family portal
+ * Clear display of all contact options with hours
+ */
+export interface AgencyContactInfo {
+  /** Organization ID */
+  organizationId: UUID;
+
+  /** Organization name */
+  organizationName: string;
+
+  /** Organization logo URL */
+  logoUrl?: string;
+
+  // ---- Primary Contact Information ----
+
+  /** Main office phone number */
+  mainPhone: string;
+
+  /** Main office fax number */
+  faxNumber?: string;
+
+  /** General email address */
+  generalEmail: string;
+
+  /** Website URL */
+  websiteUrl?: string;
+
+  // ---- Physical Address ----
+
+  /** Street address */
+  streetAddress: string;
+
+  /** Suite/unit number */
+  suiteNumber?: string;
+
+  /** City */
+  city: string;
+
+  /** State/Province */
+  state: string;
+
+  /** ZIP/Postal code */
+  postalCode: string;
+
+  /** Country */
+  country: string;
+
+  // ---- Business Hours ----
+
+  /** Regular business hours by day */
+  businessHours: BusinessHours[];
+
+  /** Timezone for business hours */
+  timezone: string;
+
+  /** Holiday schedule and closures */
+  holidaySchedule: HolidaySchedule[];
+
+  // ---- Emergency & After-Hours ----
+
+  /** Emergency phone number (24/7) */
+  emergencyPhone: string;
+
+  /** Emergency instructions */
+  emergencyInstructions: string;
+
+  /** After-hours phone number */
+  afterHoursPhone?: string;
+
+  /** After-hours instructions */
+  afterHoursInstructions?: string;
+
+  /** Nurse hotline (if available) */
+  nurseHotline?: string;
+
+  // ---- Department Contacts ----
+
+  /** List of department/staff contacts */
+  departmentContacts: AgencyContact[];
+
+  // ---- Additional Information ----
+
+  /** Message for families */
+  welcomeMessage?: string;
+
+  /** Special announcements */
+  announcements?: AgencyAnnouncement[];
+
+  /** Last updated timestamp */
+  lastUpdated: Timestamp;
+}
+
+/**
+ * Agency announcement for families
+ */
+export interface AgencyAnnouncement {
+  id: UUID;
+  title: string;
+  message: string;
+  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  effectiveFrom: Timestamp;
+  effectiveTo?: Timestamp;
+  dismissible: boolean;
+}
+
+/**
+ * Office status (open/closed/limited)
+ */
+export type OfficeStatus = 'OPEN' | 'CLOSED' | 'LIMITED_HOURS' | 'EMERGENCY_ONLY';
+
+/**
+ * Current agency status for quick display
+ */
+export interface AgencyStatusInfo {
+  /** Current office status */
+  currentStatus: OfficeStatus;
+
+  /** Status message */
+  statusMessage: string;
+
+  /** When office opens/closes next */
+  nextStatusChange?: {
+    status: OfficeStatus;
+    time: Timestamp;
+    message: string;
+  };
+
+  /** Is currently within business hours */
+  isBusinessHours: boolean;
+
+  /** Is emergency line available */
+  emergencyAvailable: boolean;
+
+  /** Urgent announcements to display */
+  urgentAnnouncements: AgencyAnnouncement[];
+}
+
+/**
+ * Input for getting agency contact info
+ */
+export interface GetAgencyContactInfoInput {
+  familyMemberId: UUID;
+  clientId: UUID;
+  /** Include full holiday schedule */
+  includeHolidaySchedule?: boolean;
+  /** Include announcements */
+  includeAnnouncements?: boolean;
+}
+
+// ============================================================================
+// Family Onboarding Guide Types
+// ============================================================================
+
+/**
+ * Onboarding step status
+ */
+export type OnboardingStepStatus =
+  | 'NOT_STARTED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'SKIPPED';
+
+/**
+ * Type of onboarding content
+ */
+export type OnboardingContentType =
+  | 'WELCOME' // Welcome message
+  | 'VIDEO' // Tutorial video
+  | 'ARTICLE' // Text article
+  | 'CHECKLIST' // Checklist of items
+  | 'INTERACTIVE' // Interactive tutorial
+  | 'FAQ'; // Frequently asked questions
+
+/**
+ * Onboarding step category
+ */
+export type OnboardingCategory =
+  | 'GETTING_STARTED' // Initial setup
+  | 'PORTAL_NAVIGATION' // How to use the portal
+  | 'CARE_TEAM' // Meet your care team
+  | 'COMMUNICATION' // How to communicate
+  | 'SCHEDULING' // Understanding schedules
+  | 'BILLING' // Billing and payments
+  | 'DOCUMENTS' // Document management
+  | 'EMERGENCY' // Emergency procedures
+  | 'RESOURCES'; // Additional resources
+
+/**
+ * Single onboarding step
+ */
+export interface OnboardingStep extends Entity {
+  /** Step identifier */
+  stepId: string;
+
+  /** Display order */
+  order: number;
+
+  /** Category of this step */
+  category: OnboardingCategory;
+
+  /** Step title */
+  title: string;
+
+  /** Brief description */
+  description: string;
+
+  /** Content type */
+  contentType: OnboardingContentType;
+
+  /** Estimated time to complete (minutes) */
+  estimatedMinutes: number;
+
+  /** Is this step required */
+  isRequired: boolean;
+
+  /** Can this step be skipped */
+  canSkip: boolean;
+
+  /** Icon identifier for UI */
+  iconName?: string;
+
+  /** Organization ID */
+  organizationId: UUID;
+}
+
+/**
+ * Content for an onboarding step
+ */
+export interface OnboardingStepContent {
+  stepId: string;
+
+  /** Main content (markdown) */
+  bodyContent: string;
+
+  /** Video URL if applicable */
+  videoUrl?: string;
+
+  /** Video thumbnail */
+  videoThumbnail?: string;
+
+  /** Video duration in seconds */
+  videoDurationSeconds?: number;
+
+  /** Checklist items if applicable */
+  checklistItems?: OnboardingChecklistItem[];
+
+  /** FAQ items if applicable */
+  faqItems?: OnboardingFAQItem[];
+
+  /** Tips or highlights */
+  tips?: string[];
+
+  /** Action button text */
+  actionButtonText?: string;
+
+  /** Action button URL */
+  actionButtonUrl?: string;
+
+  /** Related steps */
+  relatedStepIds?: string[];
+}
+
+/**
+ * Checklist item for onboarding
+ */
+export interface OnboardingChecklistItem {
+  id: string;
+  text: string;
+  description?: string;
+  isRequired: boolean;
+  helpUrl?: string;
+}
+
+/**
+ * FAQ item for onboarding
+ */
+export interface OnboardingFAQItem {
+  id: string;
+  question: string;
+  answer: string;
+  category?: string;
+}
+
+/**
+ * Family member's progress through onboarding
+ */
+export interface FamilyOnboardingProgress extends Entity {
+  /** Family member ID */
+  familyMemberId: UUID;
+
+  /** Client ID */
+  clientId: UUID;
+
+  /** Overall completion percentage */
+  overallProgress: number;
+
+  /** Steps progress */
+  stepProgress: OnboardingStepProgress[];
+
+  /** When onboarding was started */
+  startedAt: Timestamp;
+
+  /** When onboarding was completed */
+  completedAt?: Timestamp;
+
+  /** Is onboarding complete */
+  isComplete: boolean;
+
+  /** Time spent on onboarding (minutes) */
+  totalTimeSpentMinutes: number;
+
+  /** Organization ID */
+  organizationId: UUID;
+}
+
+/**
+ * Progress for a single onboarding step
+ */
+export interface OnboardingStepProgress {
+  stepId: string;
+  status: OnboardingStepStatus;
+  startedAt?: Timestamp;
+  completedAt?: Timestamp;
+  skippedAt?: Timestamp;
+  timeSpentMinutes: number;
+  checklistProgress?: OnboardingChecklistProgress[];
+}
+
+/**
+ * Progress for checklist items
+ */
+export interface OnboardingChecklistProgress {
+  itemId: string;
+  isChecked: boolean;
+  checkedAt?: Timestamp;
+}
+
+/**
+ * Complete onboarding guide for display
+ */
+export interface FamilyOnboardingGuide {
+  /** Family member's name for personalization */
+  familyMemberName: string;
+
+  /** Client's name */
+  clientName: string;
+
+  /** Welcome message */
+  welcomeMessage: string;
+
+  /** Organization name */
+  organizationName: string;
+
+  /** Care coordinator contact */
+  careCoordinatorContact?: {
+    name: string;
+    phone: string;
+    email: string;
+    photoUrl?: string;
+  };
+
+  /** All onboarding steps */
+  steps: OnboardingStepWithContent[];
+
+  /** Family member's progress */
+  progress: FamilyOnboardingProgress;
+
+  /** Categories with their steps */
+  categories: OnboardingCategoryInfo[];
+
+  /** Quick start tips */
+  quickStartTips: string[];
+
+  /** Emergency contact info (always visible) */
+  emergencyContact: {
+    phone: string;
+    instructions: string;
+  };
+}
+
+/**
+ * Onboarding step with content combined
+ */
+export interface OnboardingStepWithContent extends OnboardingStep {
+  content: OnboardingStepContent;
+  progress?: OnboardingStepProgress;
+}
+
+/**
+ * Category info for grouping steps
+ */
+export interface OnboardingCategoryInfo {
+  category: OnboardingCategory;
+  displayName: string;
+  description: string;
+  iconName: string;
+  stepCount: number;
+  completedCount: number;
+  isExpanded?: boolean;
+}
+
+/**
+ * Input for starting onboarding
+ */
+export interface StartOnboardingInput {
+  familyMemberId: UUID;
+  clientId: UUID;
+}
+
+/**
+ * Input for completing an onboarding step
+ */
+export interface CompleteOnboardingStepInput {
+  familyMemberId: UUID;
+  clientId: UUID;
+  stepId: string;
+  timeSpentMinutes?: number;
+  checklistProgress?: OnboardingChecklistProgress[];
+}
+
+/**
+ * Input for skipping an onboarding step
+ */
+export interface SkipOnboardingStepInput {
+  familyMemberId: UUID;
+  clientId: UUID;
+  stepId: string;
+}
+
+/**
+ * Onboarding completion summary
+ */
+export interface OnboardingCompletionSummary {
+  familyMemberId: UUID;
+  clientId: UUID;
+  completedStepsCount: number;
+  totalStepsCount: number;
+  skippedStepsCount: number;
+  totalTimeSpentMinutes: number;
+  completedAt: Timestamp;
+  nextRecommendedAction?: {
+    title: string;
+    description: string;
+    actionUrl: string;
+  };
+}
+
+// ============================================================================
+// Family Document Management Types
+// ============================================================================
+
+/**
+ * Document category for organization
+ */
+export type FamilyDocumentCategory =
+  | 'INSURANCE' // Insurance cards, policies
+  | 'MEDICAL_RECORDS' // Medical history, reports
+  | 'LEGAL' // Power of attorney, advance directives
+  | 'IDENTIFICATION' // ID, birth certificate
+  | 'CARE_PLAN' // Care plans provided by agency
+  | 'PROGRESS_NOTES' // Progress notes and reports
+  | 'ASSESSMENTS' // Clinical assessments
+  | 'CONSENTS' // Signed consent forms
+  | 'BILLING' // Invoices, statements
+  | 'CORRESPONDENCE' // Letters, communications
+  | 'PHOTOS' // Client photos (with consent)
+  | 'OTHER'; // Miscellaneous documents
+
+/**
+ * Document status
+ */
+export type FamilyDocumentStatus =
+  | 'UPLOADING' // Currently being uploaded
+  | 'PROCESSING' // Being processed/scanned
+  | 'ACTIVE' // Available for viewing
+  | 'ARCHIVED' // Archived but retrievable
+  | 'EXPIRED' // Document has expired
+  | 'DELETED'; // Soft deleted
+
+/**
+ * Document access level
+ */
+export type DocumentAccessLevel =
+  | 'FAMILY_ONLY' // Only visible to family
+  | 'CARE_TEAM' // Visible to care team and family
+  | 'AGENCY_ONLY' // Only visible to agency staff
+  | 'PUBLIC'; // Visible to all stakeholders
+
+/**
+ * Upload source
+ */
+export type DocumentUploadSource =
+  | 'FAMILY_PORTAL' // Uploaded by family through portal
+  | 'AGENCY' // Uploaded by agency staff
+  | 'CAREGIVER' // Uploaded by caregiver
+  | 'SYSTEM' // System-generated document
+  | 'EXTERNAL'; // From external integration
+
+/**
+ * Document file type
+ */
+export type DocumentFileType =
+  | 'PDF'
+  | 'IMAGE'
+  | 'WORD'
+  | 'EXCEL'
+  | 'TEXT'
+  | 'OTHER';
+
+/**
+ * Family document record
+ */
+export interface FamilyDocument extends Entity {
+  /** Client this document belongs to */
+  clientId: UUID;
+
+  /** Family member who uploaded (if applicable) */
+  uploadedByFamilyMemberId?: UUID;
+
+  /** Document category */
+  category: FamilyDocumentCategory;
+
+  /** Document title */
+  title: string;
+
+  /** Document description */
+  description?: string;
+
+  /** Original file name */
+  fileName: string;
+
+  /** File extension */
+  fileExtension: string;
+
+  /** File type */
+  fileType: DocumentFileType;
+
+  /** File size in bytes */
+  fileSizeBytes: number;
+
+  /** MIME type */
+  mimeType: string;
+
+  /** Storage path/key */
+  storagePath: string;
+
+  /** Document status */
+  status: FamilyDocumentStatus;
+
+  /** Access level */
+  accessLevel: DocumentAccessLevel;
+
+  /** Upload source */
+  uploadSource: DocumentUploadSource;
+
+  /** Document date (e.g., date on insurance card) */
+  documentDate?: string;
+
+  /** Expiration date if applicable */
+  expiresAt?: Timestamp;
+
+  /** Tags for search */
+  tags?: string[];
+
+  /** Custom metadata */
+  metadata?: Record<string, unknown>;
+
+  /** Thumbnail URL for images/PDFs */
+  thumbnailUrl?: string;
+
+  /** Download count */
+  downloadCount: number;
+
+  /** Last downloaded at */
+  lastDownloadedAt?: Timestamp;
+
+  /** Last viewed at */
+  lastViewedAt?: Timestamp;
+
+  /** Virus scan status */
+  virusScanStatus: 'PENDING' | 'CLEAN' | 'INFECTED' | 'ERROR';
+
+  /** Virus scan completed at */
+  virusScanCompletedAt?: Timestamp;
+
+  /** Organization ID */
+  organizationId: UUID;
+}
+
+/**
+ * Document upload request
+ */
+export interface DocumentUploadRequest {
+  familyMemberId: UUID;
+  clientId: UUID;
+  category: FamilyDocumentCategory;
+  title: string;
+  description?: string;
+  documentDate?: string;
+  expiresAt?: Timestamp;
+  tags?: string[];
+  accessLevel?: DocumentAccessLevel;
+}
+
+/**
+ * Document upload response with signed URL
+ */
+export interface DocumentUploadResponse {
+  documentId: UUID;
+  uploadUrl: string;
+  uploadUrlExpiresAt: Timestamp;
+  maxFileSizeBytes: number;
+  allowedMimeTypes: string[];
+  instructions: string;
+}
+
+/**
+ * Complete upload confirmation
+ */
+export interface CompleteUploadRequest {
+  documentId: UUID;
+  familyMemberId: UUID;
+  clientId: UUID;
+  fileName: string;
+  fileSizeBytes: number;
+  mimeType: string;
+}
+
+/**
+ * Document download response
+ */
+export interface DocumentDownloadResponse {
+  documentId: UUID;
+  downloadUrl: string;
+  expiresAt: Timestamp;
+  fileName: string;
+  fileType: DocumentFileType;
+  fileSizeBytes: number;
+}
+
+/**
+ * Document list item (summary view)
+ */
+export interface FamilyDocumentListItem {
+  id: UUID;
+  title: string;
+  category: FamilyDocumentCategory;
+  categoryDisplayName: string;
+  fileName: string;
+  fileType: DocumentFileType;
+  fileSizeBytes: number;
+  status: FamilyDocumentStatus;
+  uploadedAt: Timestamp;
+  uploadedByName?: string;
+  documentDate?: string;
+  expiresAt?: Timestamp;
+  isExpiringSoon?: boolean;
+  thumbnailUrl?: string;
+  downloadCount: number;
+}
+
+/**
+ * Document list response with pagination
+ */
+export interface FamilyDocumentListResponse {
+  documents: FamilyDocumentListItem[];
+  pagination: {
+    totalCount: number;
+    totalPages: number;
+    currentPage: number;
+    pageSize: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+  /** Documents grouped by category */
+  byCategory: {
+    category: FamilyDocumentCategory;
+    displayName: string;
+    count: number;
+  }[];
+}
+
+/**
+ * Document search/filter options
+ */
+export interface DocumentSearchOptions {
+  familyMemberId: UUID;
+  clientId: UUID;
+  categories?: FamilyDocumentCategory[];
+  status?: FamilyDocumentStatus[];
+  searchTerm?: string;
+  tags?: string[];
+  uploadedAfter?: Timestamp;
+  uploadedBefore?: Timestamp;
+  sortBy?: 'uploadedAt' | 'title' | 'category' | 'documentDate';
+  sortOrder?: 'ASC' | 'DESC';
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * Document expiration alert
+ */
+export interface DocumentExpirationAlert {
+  documentId: UUID;
+  title: string;
+  category: FamilyDocumentCategory;
+  expiresAt: Timestamp;
+  daysUntilExpiration: number;
+  severity: 'INFO' | 'WARNING' | 'URGENT';
+  message: string;
+}
+
+/**
+ * Document dashboard for family
+ */
+export interface FamilyDocumentDashboard {
+  clientId: UUID;
+  clientName: string;
+
+  /** Total document counts */
+  totalDocuments: number;
+  documentsByCategory: {
+    category: FamilyDocumentCategory;
+    displayName: string;
+    count: number;
+    iconName: string;
+  }[];
+
+  /** Recent uploads */
+  recentUploads: FamilyDocumentListItem[];
+
+  /** Recently viewed */
+  recentlyViewed: FamilyDocumentListItem[];
+
+  /** Expiration alerts */
+  expirationAlerts: DocumentExpirationAlert[];
+
+  /** Required documents that are missing */
+  missingRequiredDocuments: {
+    category: FamilyDocumentCategory;
+    displayName: string;
+    description: string;
+    isRequired: boolean;
+  }[];
+
+  /** Storage usage */
+  storageUsed: {
+    bytesUsed: number;
+    bytesLimit: number;
+    percentUsed: number;
+  };
+
+  organizationId: UUID;
+  lastUpdated: Timestamp;
+}
+
+/**
+ * Category display info
+ */
+export interface DocumentCategoryInfo {
+  category: FamilyDocumentCategory;
+  displayName: string;
+  description: string;
+  iconName: string;
+  allowedFileTypes: DocumentFileType[];
+  maxFileSizeBytes: number;
+  isRequiredForClient: boolean;
+  exampleDocuments: string[];
+}
+
+/**
+ * Document version (for tracking updates)
+ */
+export interface FamilyDocumentVersion {
+  id: UUID;
+  documentId: UUID;
+  versionNumber: number;
+  fileName: string;
+  fileSizeBytes: number;
+  storagePath: string;
+  uploadedAt: Timestamp;
+  uploadedByFamilyMemberId?: UUID;
+  uploadedByName?: string;
+  changeNotes?: string;
+}
+
+/**
+ * Input for updating document metadata
+ */
+export interface UpdateDocumentInput {
+  documentId: UUID;
+  familyMemberId: UUID;
+  clientId: UUID;
+  title?: string;
+  description?: string;
+  category?: FamilyDocumentCategory;
+  documentDate?: string;
+  expiresAt?: Timestamp;
+  tags?: string[];
+}
+
+/**
+ * Input for deleting a document
+ */
+export interface DeleteDocumentInput {
+  documentId: UUID;
+  familyMemberId: UUID;
+  clientId: UUID;
+  reason?: string;
+}

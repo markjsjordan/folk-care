@@ -55,6 +55,30 @@ describe('usePermissions', () => {
 
       expect(result.current.can('read:all-users')).toBe(false);
     });
+
+    it('should return true when user has a resource wildcard permission (e.g. "clients:*")', () => {
+      const store = useAuthStore.getState();
+      store.setAuth(createUser(['org_admin'], ['clients:*', 'billing:*']), 'token');
+
+      const { result } = renderHook(() => usePermissions());
+
+      expect(result.current.can('clients:read')).toBe(true);
+      expect(result.current.can('clients:create')).toBe(true);
+      expect(result.current.can('billing:delete')).toBe(true);
+      // Wildcard on one resource does not grant another
+      expect(result.current.can('caregivers:read')).toBe(false);
+    });
+
+    it('should return true for any permission when user has the full wildcard "*:*"', () => {
+      const store = useAuthStore.getState();
+      store.setAuth(createUser(['super_admin'], ['*:*']), 'token');
+
+      const { result } = renderHook(() => usePermissions());
+
+      expect(result.current.can('clients:read')).toBe(true);
+      expect(result.current.can('admin:access')).toBe(true);
+      expect(result.current.can('anything:at-all')).toBe(true);
+    });
   });
 
   describe('canAny', () => {
@@ -80,6 +104,15 @@ describe('usePermissions', () => {
       const { result } = renderHook(() => usePermissions());
 
       expect(result.current.canAny(['read:users', 'write:users', 'delete:users'])).toBe(false);
+    });
+
+    it('should match resource wildcards when checking multiple permissions', () => {
+      const store = useAuthStore.getState();
+      store.setAuth(createUser(['org_admin'], ['clients:*']), 'token');
+
+      const { result } = renderHook(() => usePermissions());
+
+      expect(result.current.canAny(['clients:read', 'billing:read'])).toBe(true);
     });
 
     it('should return true with empty permissions array (edge case)', () => {
@@ -116,6 +149,15 @@ describe('usePermissions', () => {
       const { result } = renderHook(() => usePermissions());
 
       expect(result.current.canAll(['read:users', 'write:users', 'delete:users'])).toBe(false);
+    });
+
+    it('should match resource wildcards when requiring multiple permissions', () => {
+      const store = useAuthStore.getState();
+      store.setAuth(createUser(['org_admin'], ['clients:*', 'billing:*']), 'token');
+
+      const { result } = renderHook(() => usePermissions());
+
+      expect(result.current.canAll(['clients:read', 'clients:delete', 'billing:read'])).toBe(true);
     });
 
     it('should return true with empty permissions array', () => {
@@ -294,6 +336,36 @@ describe('usePermissions', () => {
       // Has admin role
       expect(result.current.hasRole('admin')).toBe(true);
       expect(result.current.hasAnyRole(['admin'])).toBe(true);
+    });
+
+    it('should handle a SUPER_ADMIN with resource-wildcard permissions (matches production seed data)', () => {
+      const store = useAuthStore.getState();
+      store.setAuth(
+        createUser(['SUPER_ADMIN'], [
+          'organizations:*',
+          'users:*',
+          'clients:*',
+          'caregivers:*',
+          'visits:*',
+          'schedules:*',
+          'care-plans:*',
+          'tasks:*',
+          'billing:*',
+          'reports:*',
+          'settings:*',
+        ]),
+        'token'
+      );
+
+      const { result } = renderHook(() => usePermissions());
+
+      // Sidebar-style exact permission checks must resolve via the resource wildcard
+      expect(result.current.can('clients:read')).toBe(true);
+      expect(result.current.can('caregivers:read')).toBe(true);
+      expect(result.current.can('visits:read')).toBe(true);
+      expect(result.current.can('billing:read')).toBe(true);
+
+      expect(result.current.hasRole('SUPER_ADMIN')).toBe(true);
     });
   });
 });

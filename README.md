@@ -1,10 +1,10 @@
 # Folk Care
 
-> **🚀 Soft Launch: December 1, 2025**
 > **Status:** Production Ready - Open Source
 
 [![CI](https://github.com/neighborhood-lab/folkcare/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/neighborhood-lab/folkcare/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/neighborhood-lab/folkcare/branch/develop/graph/badge.svg)](https://codecov.io/gh/neighborhood-lab/folkcare/tree/develop)
+[![All Contributors](https://img.shields.io/badge/all_contributors-3-orange.svg?style=flat-square)](#contributors)
 
 > **Software for the people who care.**
 
@@ -24,13 +24,12 @@ Home healthcare agencies face a broken software market:
 - ✅ **Modern Technology** - TypeScript, React, PostgreSQL
 - ✅ **Production Ready** - Built in 28 days with AI assistance, deployed and tested
 
-Built by **[Neighborhood Lab](https://neighborhoodlab.org)** - community-owned software for the common good.
+Built by **[Neighborhood Lab](https://neighborhoodlab.substack.com/)** - community-owned software for the common good.
 
 ## 🌐 Try It Now
 
 - **[Interactive Showcase](https://folk.care/)** ⭐ **Start here** - No login required, explore with realistic demo data
 - **[Production SaaS](https://folk.care/)** - Full application (free 14-day trial)
-- **[Health Check](https://folk.care/health)** - System status & uptime
 
 **Demo Logins:**
 ```
@@ -63,11 +62,10 @@ Family: family@tx.demo / demo1234
 
 ## 🔗 Community
 
-- [Discord](https://discord.gg/EkeXQZFq) - Chat with the community
+- [Discord](https://discord.com/invite/EkeXQZFq) - Chat with the community
 - [Substack](https://neighborhoodlab.substack.com/) - Updates, news and commentary  
 - [Patreon](https://www.patreon.com/cw/neighborhood_lab) - Support continued development
 - [Product Site](https://neighborhood-lab.github.io/product/) - Marketing site
-- [Neighborhood Lab](https://neighborhood-lab.github.io/) - Organization site
 
 ## Vision
 
@@ -674,6 +672,30 @@ vercel promote <deployment-url> --scope <team-name>
 - [Care Plans & Tasks Library](./verticals/care-plans-tasks/README.md) - Care plans, goals, interventions, and task management
 - [Family Engagement Platform](./verticals/family-engagement/README.md) - Family portal, transparency, and communication features
 - [Core Package](./packages/core/README.md) - Core functionality documentation
+
+## Contributors
+
+Thanks to these wonderful people who have contributed to Folk Care:
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/bedwards"><img src="https://avatars.githubusercontent.com/u/1234567?v=4" width="100px;" alt="Brian Edwards"/><br /><sub><b>Brian Edwards</b></sub></a><br /><a href="https://github.com/neighborhood-lab/folkcare/commits?author=bedwards" title="Code">💻</a> <a href="https://github.com/neighborhood-lab/folkcare/commits?author=bedwards" title="Documentation">📖</a> <a href="#ideas-bedwards" title="Ideas, Planning, & Feedback">🤔</a> <a href="#projectManagement-bedwards" title="Project Management">📆</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/tove-bot"><img src="https://avatars.githubusercontent.com/u/196489584?v=4" width="100px;" alt="Tove Bot"/><br /><sub><b>Tove Bot</b></sub></a><br /><a href="https://github.com/neighborhood-lab/folkcare/commits?author=tove-bot" title="Code">💻</a> <a href="https://github.com/neighborhood-lab/folkcare/commits?author=tove-bot" title="Documentation">📖</a> <a href="https://github.com/neighborhood-lab/folkcare/issues?q=author%3Atove-bot" title="Bug reports">🐛</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/gaute-bot"><img src="https://avatars.githubusercontent.com/u/197395178?v=4" width="100px;" alt="Gaute Bot"/><br /><sub><b>Gaute Bot</b></sub></a><br /><a href="https://github.com/neighborhood-lab/folkcare/commits?author=gaute-bot" title="Code">💻</a> <a href="https://github.com/neighborhood-lab/folkcare/commits?author=gaute-bot" title="Documentation">📖</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
 
 ## Contributing
 

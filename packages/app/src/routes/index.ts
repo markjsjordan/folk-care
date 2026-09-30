@@ -9,6 +9,11 @@ import { Database, PermissionService, UserRepository, AuthMiddleware } from '@fo
 import { createClientRouter, ClientService, ClientRepository } from '@folkcare/client-demographics';
 import { CarePlanService, CarePlanRepository } from '@folkcare/care-plans-tasks';
 import { createCarePlanHandlers } from '@folkcare/care-plans-tasks';
+import { createTaskPrioritizationRoutes, createNaturalLanguageCarePlanRoutes, createCarePlanEffectivenessRoutes } from '@folkcare/care-plans-tasks';
+import { createOptimalVisitFrequencyRoutes } from '@folkcare/scheduling-visits';
+import { createTrainingRecommendationRoutes } from '@folkcare/caregiver-staff';
+import { createBurnoutRoutes } from '@folkcare/caregiver-burnout-prediction';
+import { createAIRoutes } from '@folkcare/ai-services';
 import { createHealthRouter } from './health';
 import { createMetricsRouter } from './metrics';
 import { createAuthRouter } from './auth';
@@ -51,6 +56,8 @@ import { createVerificationRouter } from './verification.js';
 import { createImportRoutes } from './import-routes.js';
 import { createBillingRouter } from './billing.js';
 import { createComplianceRouter } from './compliance.js';
+import exportRouter from './export.js';
+import { createAIUsageRouter } from './ai-usage.js';
 
 /**
  * Helper to create router from care plan handlers object
@@ -124,6 +131,9 @@ function createMedicationRouter(handlers: ReturnType<typeof createMedicationHand
   router.post('/medications/:medicationId/administer', handlers.recordAdministration);
   router.get('/medications/:medicationId/administrations', handlers.getMedicationAdministrations);
 
+  // Medication interaction checking endpoint
+  router.post('/medications/check-interactions', handlers.checkInteractions);
+
   return router;
 }
 
@@ -190,7 +200,7 @@ function createFamilyEngagementRouter(handlers: ReturnType<typeof createFamilyEn
 /**
  * Setup all API routes for the application
  */
-export function setupRoutes(app: Express, db: Database): void {
+export async function setupRoutes(app: Express, db: Database): Promise<void> {
   console.log('Setting up API routes...');
 
   // Health check route (no authentication required)
@@ -248,15 +258,40 @@ export function setupRoutes(app: Express, db: Database): void {
   app.use('/api', generalApiLimiter, carePlanRouter);
   console.log('  ✓ Care Plans & Tasks routes registered (with rate limiting)');
 
+  // Task Prioritization routes (AI-powered)
+  const taskPrioritizationRouter = createTaskPrioritizationRoutes(db);
+  app.use('/api', generalApiLimiter, taskPrioritizationRouter);
+  console.log('  ✓ Task Prioritization routes registered (with rate limiting)');
+
+  // Natural Language Care Plan routes (AI-powered)
+  const naturalLanguageCarePlanRouter = createNaturalLanguageCarePlanRoutes(db);
+  app.use('/api', generalApiLimiter, naturalLanguageCarePlanRouter);
+  console.log('  ✓ Natural Language Care Plan routes registered (with rate limiting)');
+
+  // Care Plan Effectiveness Scoring routes (AI-powered)
+  const carePlanEffectivenessRouter = createCarePlanEffectivenessRoutes(db);
+  app.use('/api', generalApiLimiter, carePlanEffectivenessRouter);
+  console.log('  ✓ Care Plan Effectiveness routes registered (with rate limiting)');
+
   // Caregiver & Staff Management routes
   const caregiverRouter = createCaregiverRouter(db);
   app.use('/api/caregivers', generalApiLimiter, caregiverRouter);
   console.log('  ✓ Caregiver & Staff Management routes registered (with rate limiting)');
 
+  // Training Recommendations routes (AI-powered)
+  const trainingRecommendationRouter = createTrainingRecommendationRoutes(db);
+  app.use('/api/caregivers', generalApiLimiter, trainingRecommendationRouter);
+  console.log('  ✓ Training Recommendations routes registered (with rate limiting)');
+
   // Visit & Scheduling routes
   const visitRouter = createVisitRouter(db);
   app.use('/api/visits', generalApiLimiter, visitRouter);
   console.log('  ✓ Visit & Scheduling routes registered (with rate limiting)');
+
+  // Optimal Visit Frequency routes (AI-powered)
+  const optimalFrequencyRouter = createOptimalVisitFrequencyRoutes(db);
+  app.use('/api', generalApiLimiter, optimalFrequencyRouter);
+  console.log('  ✓ Optimal Visit Frequency routes registered (with rate limiting)');
 
   // Demo routes (interactive demo system) - includes EVV clock-in/out
   const demoRouter = createDemoRouter(db);
@@ -321,6 +356,16 @@ export function setupRoutes(app: Express, db: Database): void {
   app.use('/api', generalApiLimiter, incidentRouter);
   console.log('  ✓ Incident Reporting routes registered (with rate limiting)');
 
+  // Caregiver Burnout Prediction routes
+  const burnoutRouter = Router();
+  const authMiddleware2 = new AuthMiddleware(db);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  burnoutRouter.use(authMiddleware2.requireAuth as any);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  createBurnoutRoutes(burnoutRouter as any, db);
+  app.use('/api', generalApiLimiter, burnoutRouter);
+  console.log('  ✓ Caregiver Burnout Prediction routes registered (with rate limiting)');
+
   // Family Engagement routes
   const familyMemberRepo = new FamilyMemberRepository(db);
   const notificationRepo = new NotificationRepository(db);
@@ -376,6 +421,21 @@ export function setupRoutes(app: Express, db: Database): void {
   const complianceRouter = createComplianceRouter(db);
   app.use('/api/compliance', generalApiLimiter, complianceRouter);
   console.log('  ✓ Compliance Autopilot routes registered (with rate limiting)');
+
+  // Data Export routes
+  app.use('/api/export', generalApiLimiter, exportRouter);
+  console.log('  ✓ Data Export routes registered (with rate limiting)');
+
+  // AI Services routes (note summarization, sentiment analysis)
+  const aiRouter = createAIRoutes(db);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  app.use('/api', generalApiLimiter, aiRouter as any);
+  console.log('  ✓ AI Services routes registered (with rate limiting)');
+
+  // AI Usage tracking routes
+  const aiUsageRouter = createAIUsageRouter(db);
+  app.use('/api', generalApiLimiter, aiUsageRouter);
+  console.log('  ✓ AI Usage tracking routes registered (with rate limiting)');
 
   console.log('API routes setup complete\n');
 }

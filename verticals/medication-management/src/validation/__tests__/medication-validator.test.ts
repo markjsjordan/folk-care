@@ -21,7 +21,7 @@ import {
 // Fixed timestamp for deterministic tests
 const FIXED_DATE = '2024-01-15T10:00:00.000Z';
 const PAST_DATE = '2024-01-10T10:00:00.000Z';
-const FUTURE_DATE = '2026-01-15T10:00:00.000Z';
+const FUTURE_DATE = '2027-01-15T10:00:00.000Z';
 
 describe('Medication Validator', () => {
   describe('medicationRouteSchema', () => {

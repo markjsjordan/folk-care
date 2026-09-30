@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { codecovVitePlugin } from '@codecov/vite-plugin';
+import { VitePWA } from 'vite-plugin-pwa';
+import { visualizer } from 'rollup-plugin-visualizer';
+
+const isAnalyze = process.env.ANALYZE === 'true';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -15,6 +19,73 @@ export default defineConfig({
         plugins: [],
       },
     }),
+    // PWA plugin for offline functionality
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
+      manifest: {
+        name: 'Folk Care',
+        short_name: 'Folk Care',
+        description: 'Shared care software for home care agencies',
+        theme_color: '#2563eb',
+        background_color: '#ffffff',
+        display: 'standalone',
+        scope: '/',
+        start_url: '/',
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          }
+        ]
+      },
+      workbox: {
+        // Increase max file size to cache the large JS bundle
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
+        // Cache API responses
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/api\..*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 // 24 hours
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /\.(png|jpg|jpeg|svg|gif|webp)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'image-cache',
+              expiration: {
+                maxEntries: 60,
+                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+              }
+            }
+          }
+        ],
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
+        cleanupOutdatedCaches: true
+      },
+      devOptions: {
+        enabled: true, // Enable in development for testing
+        type: 'module'
+      }
+    }),
     // Codecov bundle analysis - must be placed after all other plugins
     codecovVitePlugin({
       enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
@@ -26,6 +97,21 @@ export default defineConfig({
         branch: process.env.GITHUB_REF_NAME,
       },
     }),
+    // Bundle visualization - generates interactive treemap showing module sizes
+    // Only enabled when ANALYZE=true to avoid slowing down normal builds
+    // Run: npm run build:analyze (auto-opens dist/stats.html in browser)
+    // Templates: treemap (large deps), sunburst (hierarchy), network (relationships)
+    ...(isAnalyze
+      ? [
+          visualizer({
+            filename: 'dist/stats.html',
+            open: true,
+            gzipSize: true,
+            brotliSize: true,
+            template: 'treemap',
+          }),
+        ]
+      : []),
   ],
   resolve: {
     alias: {

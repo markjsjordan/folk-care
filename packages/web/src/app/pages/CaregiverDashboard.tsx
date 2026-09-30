@@ -25,7 +25,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, useIsMobile } from '@/core/hooks';
 import { useConnectionStatus } from '@/hooks';
-import { Card, CardHeader, CardContent, Button, EmptyState } from '@/core/components';
+import { Card, CardHeader, CardContent, Button, EmptyState, DemoBadge } from '@/core/components';
 import { DataFreshness, StaleDataWarning } from '@/components/DataFreshness';
 import { NetworkStatusBanner } from '@/components/sync/NetworkStatusBanner';
 import {
@@ -619,11 +619,11 @@ export const CaregiverDashboard: React.FC = () => {
 
   // Navigation handlers to avoid void operator issues
   const handleNavigateToCredentials = useCallback(() => {
-    navigate('/profile/credentials');
+    navigate('/settings/profile');
   }, [navigate]);
 
   const handleNavigateToSchedule = useCallback(() => {
-    navigate('/schedule');
+    navigate('/scheduling');
   }, [navigate]);
 
   const handleNavigateToTimeTracking = useCallback(() => {
@@ -812,7 +812,13 @@ export const CaregiverDashboard: React.FC = () => {
       {/* Today's Schedule */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className={`${isMobile ? 'text-xl' : 'text-lg'} font-semibold text-gray-900`}>Today's Schedule</h2>
+          <div className="flex items-center gap-2">
+            <h2 className={`${isMobile ? 'text-xl' : 'text-lg'} font-semibold text-gray-900`}>Today's Schedule</h2>
+            <DemoBadge size="sm" />
+          </div>
+          <div className="flex items-center gap-3">
+            <DemoBadge size="sm" />
+          </div>
           <div className="flex items-center gap-3">
             <DataFreshness
               lastUpdated={visitsLastUpdated}
@@ -859,7 +865,10 @@ export const CaregiverDashboard: React.FC = () => {
       {/* Timesheet Status */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className={`${isMobile ? 'text-xl' : 'text-lg'} font-semibold text-gray-900`}>Timesheet Status</h2>
+          <div className="flex items-center gap-2">
+            <h2 className={`${isMobile ? 'text-xl' : 'text-lg'} font-semibold text-gray-900`}>Timesheet Status</h2>
+            <DemoBadge size="sm" />
+          </div>
           <div className="flex items-center gap-3">
             <DataFreshness
               lastUpdated={timesheetsLastUpdated}

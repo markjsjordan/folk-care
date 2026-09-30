@@ -33,6 +33,7 @@
  */
 
 import { config as dotenvConfig } from "dotenv";
+import crypto from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { faker } from '@faker-js/faker';
 import { Database, DatabaseConfig } from '../src/db/connection.js';
@@ -151,7 +152,8 @@ const ROLES: RoleDefinition[] = [
     permissions: [
       'organizations:*', 'users:*', 'clients:*', 'caregivers:*',
       'visits:*', 'schedules:*', 'care-plans:*', 'tasks:*', 'billing:*',
-      'reports:*', 'settings:*'
+      'reports:*', 'settings:*', 'evv:*', 'compliance:*', 'audits:*',
+      'admin:*'
     ]
   },
   {
@@ -389,12 +391,22 @@ const AGE_APPROPRIATE_CONDITIONS = [
 // Set seed for reproducible data
 faker.seed(2024);
 
+/**
+ * Cryptographically secure random number generator (0 to 1)
+ * Uses crypto.randomBytes() instead of secureRandom() for security
+ */
+function secureRandom(): number {
+  const buf = crypto.randomBytes(4);
+  const num = buf.readUInt32BE(0);
+  return num / 0xFFFFFFFF;
+}
+
 function randomElement<T>(array: T[]): T {
-  return array[Math.floor(Math.random() * array.length)];
+  return array[Math.floor(secureRandom() * array.length)];
 }
 
 function randomElements<T>(array: T[], count: number): T[] {
-  const shuffled = [...array].sort(() => 0.5 - Math.random());
+  const shuffled = [...array].sort(() => 0.5 - secureRandom());
   return shuffled.slice(0, count);
 }
 
@@ -411,12 +423,12 @@ function _hoursFromNow(hours: number): Date {
 }
 
 function randomDateBetween(start: Date, end: Date): Date {
-  return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+  return new Date(start.getTime() + secureRandom() * (end.getTime() - start.getTime()));
 }
 
 // Helper to select ethnicity based on Texas demographics
 function selectTexasEthnicity(): 'hispanic' | 'anglo' | 'africanAmerican' | 'asian' {
-  const rand = Math.random();
+  const rand = secureRandom();
   if (rand < 0.40) return 'hispanic';       // 40%
   if (rand < 0.80) return 'anglo';          // 40%
   if (rand < 0.92) return 'africanAmerican'; // 12%
@@ -445,7 +457,7 @@ function selectMedicalCondition(age: number) {
 
   // Use weighted random selection based on prevalence
   const totalPrevalence = eligibleConditions.reduce((sum, cond) => sum + cond.prevalence, 0);
-  let rand = Math.random() * totalPrevalence;
+  let rand = secureRandom() * totalPrevalence;
 
   for (const condition of eligibleConditions) {
     rand -= condition.prevalence;
@@ -470,8 +482,8 @@ function generateTexasAddress(location: typeof TEXAS_LOCATIONS[number]): {
   const zipCode = randomElement([...location.zipCodes]);
 
   // Add some randomness to coordinates (within ~5 mile radius)
-  const latOffset = (Math.random() - 0.5) * 0.1; // ~5.5 miles
-  const lngOffset = (Math.random() - 0.5) * 0.1;
+  const latOffset = (secureRandom() - 0.5) * 0.1; // ~5.5 miles
+  const lngOffset = (secureRandom() - 0.5) * 0.1;
 
   return {
     street: `${streetNumber} ${streetName}`,
@@ -532,7 +544,7 @@ function generateClient(
   dob.setDate(faker.number.int({ min: 1, max: 28 }));
 
   // Determine gender (realistic distribution)
-  const gender = Math.random() < 0.60 ? 'FEMALE' : 'MALE'; // 60% female in elderly care
+  const gender = secureRandom() < 0.60 ? 'FEMALE' : 'MALE'; // 60% female in elderly care
 
   // Generate culturally diverse Texas name
   const { firstName, lastName } = generateTexasName(gender);
@@ -546,13 +558,15 @@ function generateClient(
   // Phone number with correct Texas area code
   const phone = `${location.areaCode}-555-${String(index).padStart(4, '0')}`;
 
-  // Email generation
-  const emailFirstName = firstName.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Remove accents for email
-  const emailLastName = lastName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const email = faker.internet.email({ firstName: emailFirstName, lastName: emailLastName }).toLowerCase();
+  // Email generation - use index to guarantee uniqueness (faker can generate duplicates)
+  const emailFirstName = firstName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const emailLastName = lastName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const emailDomains = ['gmail.com', 'yahoo.com', 'outlook.com', 'aol.com', 'att.net'];
+  const emailDomain = emailDomains[index % emailDomains.length];
+  const email = `${emailFirstName}.${emailLastName}.client${index}@${emailDomain}`;
 
   // Emergency contact (often family member with same last name)
-  const emergencyGender = Math.random() < 0.5 ? 'MALE' : 'FEMALE';
+  const emergencyGender = secureRandom() < 0.5 ? 'MALE' : 'FEMALE';
   const emergencyFirstName = randomElement(
     emergencyGender === 'MALE'
       ? [...TEXAS_NAMES.anglo.firstNames.male]
@@ -563,7 +577,7 @@ function generateClient(
 
   // Insurance: Medicare is near-universal for 65+, some also have Medicaid
   const hasMedicare = age >= 65; // Nearly all 65+ have Medicare
-  const hasMedicaid = Math.random() < 0.35; // 35% also have Medicaid (dual-eligible)
+  const hasMedicaid = secureRandom() < 0.35; // 35% also have Medicaid (dual-eligible)
 
   const medicaidNumber = hasMedicaid ? `MC-TX-${faker.string.numeric(7)}` : null;
   const medicareNumber = hasMedicare ? `MCR${faker.string.numeric(9)}${randomElement(['A', 'B', 'C', 'D'])}` : null;
@@ -643,7 +657,7 @@ function generateCaregiver(
   dob.setDate(faker.number.int({ min: 1, max: 28 }));
 
   // Gender distribution (caregiving is female-dominated)
-  const gender = Math.random() < 0.75 ? 'FEMALE' : 'MALE'; // 75% female
+  const gender = secureRandom() < 0.75 ? 'FEMALE' : 'MALE'; // 75% female
 
   // Generate culturally diverse Texas name
   const { firstName, lastName } = generateTexasName(gender);
@@ -657,10 +671,12 @@ function generateCaregiver(
   // Phone number with correct area code
   const phone = `${location.areaCode}-${faker.string.numeric(3)}-${faker.string.numeric(4)}`;
 
-  // Email
-  const emailFirstName = firstName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const emailLastName = lastName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const email = faker.internet.email({ firstName: emailFirstName, lastName: emailLastName }).toLowerCase();
+  // Email - use index to guarantee uniqueness (faker can generate duplicates)
+  const emailFirstName = firstName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const emailLastName = lastName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const emailDomains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com'];
+  const emailDomain = emailDomains[index % emailDomains.length];
+  const email = `${emailFirstName}.${emailLastName}${index}@${emailDomain}`;
 
   // Certifications (CNAs, HHAs are common in Texas)
   const allCertifications = ['CNA', 'HHA', 'PCA', 'CPR', 'FIRST_AID', 'MEDICATION_AIDE'];
@@ -790,7 +806,7 @@ function generateVisit(
       actualEnd.setMinutes(actualEnd.getMinutes() + faker.number.int({ min: -10, max: 10 }));
 
       // EVV Compliance: 90% compliant visits
-      const isEvvCompliant = Math.random() < SEED_CONFIG.evvComplianceRate;
+      const isEvvCompliant = secureRandom() < SEED_CONFIG.evvComplianceRate;
 
       if (isEvvCompliant) {
         // Fully compliant visit with accurate GPS
@@ -807,10 +823,10 @@ function generateVisit(
         };
 
         // Verification method (prefer biometric for compliance)
-        evvVerificationMethod = Math.random() < 0.8 ? 'BIOMETRIC' : 'GPS';
+        evvVerificationMethod = secureRandom() < 0.8 ? 'BIOMETRIC' : 'GPS';
       } else {
         // 10% non-compliant visits (realistic EVV issues)
-        const issueType = Math.random();
+        const issueType = secureRandom();
 
         if (issueType < 0.4) {
           // Issue 1: Geofence warning (GPS accuracy variance - clocked in too far from location)
@@ -866,14 +882,14 @@ function generateVisit(
   }
 
   // Today's visits might be in progress
-  if (dayOffset === 0 && Math.random() > 0.7) {
+  if (dayOffset === 0 && secureRandom() > 0.7) {
     status = 'IN_PROGRESS';
     actualStart = new Date(scheduledStart);
     evvClockInGPS = {
       lat: clientCoordinates.lat + faker.number.float({ min: -0.0001, max: 0.0001, fractionDigits: 6 }),
       lng: clientCoordinates.lng + faker.number.float({ min: -0.0001, max: 0.0001, fractionDigits: 6 }),
     };
-    evvVerificationMethod = Math.random() < 0.8 ? 'BIOMETRIC' : 'GPS';
+    evvVerificationMethod = secureRandom() < 0.8 ? 'BIOMETRIC' : 'GPS';
   }
 
   return {
@@ -1481,7 +1497,7 @@ async function seedDatabase() {
         let caregiver: CaregiverData;
         const sameCityCaregivers = caregiversByCity.get(visitClient.city) || [];
 
-        if (sameCityCaregivers.length > 0 && Math.random() < 0.80) {
+        if (sameCityCaregivers.length > 0 && secureRandom() < 0.80) {
           // 80% of visits assigned to caregivers in same city
           caregiver = randomElement(sameCityCaregivers);
         } else {
@@ -1925,7 +1941,7 @@ async function seedDatabase() {
       for (const invoice of paidInvoicesResult.rows) {
         const paymentNumber = `PMT-${invoice.invoice_number.replace('INV-', '')}`;
         const paymentDate = new Date(invoice.invoice_date);
-        paymentDate.setDate(paymentDate.getDate() + Math.floor(Math.random() * 25) + 5); // Paid 5-30 days after invoice
+        paymentDate.setDate(paymentDate.getDate() + Math.floor(secureRandom() * 25) + 5); // Paid 5-30 days after invoice
 
         await client.query(
           `
@@ -1957,7 +1973,7 @@ async function seedDatabase() {
             paymentDate,
             new Date(paymentDate.getTime() + 2 * 24 * 60 * 60 * 1000), // Deposited 2 days later
             invoice.payer_type === 'MEDICAID' ? 'EFT' : randomElement(['CHECK', 'ACH', 'CREDIT_CARD']),
-            invoice.payer_type === 'MEDICAID' ? `ERA-${Date.now()}` : `REF-${Math.floor(Math.random() * 100000)}`,
+            invoice.payer_type === 'MEDICAID' ? `ERA-${Date.now()}` : `REF-${Math.floor(secureRandom() * 100000)}`,
             JSON.stringify([{ invoiceId: invoice.id, amount: invoice.total_amount }]),
             0, // All applied
             'CLEARED',

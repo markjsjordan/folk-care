@@ -47,17 +47,23 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
   };
 
   const handlePhotoCapture = () => {
-    // Placeholder for photo capture functionality
-    // In a real implementation, this would integrate with device camera
-    const mockPhoto = `data:image/jpeg;base64,mock-photo-${Date.now()}`;
-    setPhotoData([...photoData, mockPhoto]);
+    // FEATURE COMING SOON: Camera integration pending
+    // Currently deferred pending:
+    // 1. react-native-vision-camera integration for mobile
+    // 2. Web camera API integration via getUserMedia()
+    // 3. Image compression and base64 encoding
+    // 4. EXIF metadata extraction for GPS/timestamp
+    alert('📷 Photo capture is coming soon.\n\nWe are building camera integration for mobile and web.');
   };
 
   const handleSignatureCapture = () => {
-    // Placeholder for signature capture functionality
-    // In a real implementation, this would use react-signature-canvas
-    const mockSignature = `data:image/png;base64,mock-signature-${Date.now()}`;
-    setSignatureData(mockSignature);
+    // FEATURE COMING SOON: Signature canvas integration pending
+    // Currently deferred pending:
+    // 1. react-signature-canvas library integration
+    // 2. Signature validation (stroke count, area)
+    // 3. Timestamp and caregiver binding
+    // 4. Ink pressure sensitivity (stylus support)
+    alert('✍️ Signature capture is coming soon.\n\nWe are building signature canvas integration with stroke validation.');
   };
 
   const requestGPSLocation = () => {
@@ -152,8 +158,12 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
                     <div className="border-2 border-dashed border-gray-300 rounded-md p-8 text-center">
                       <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                       <p className="text-gray-600 mb-4">Client signature required</p>
-                      <Button onClick={handleSignatureCapture}>
-                        Capture Signature
+                      <Button 
+                        onClick={handleSignatureCapture}
+                        disabled
+                        title="Signature capture coming soon"
+                      >
+                        🔄 Signature Capture (Coming Soon)
                       </Button>
                     </div>
                   )}
@@ -192,9 +202,11 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
                 <Button
                   variant="outline"
                   onClick={handlePhotoCapture}
+                  disabled
                   leftIcon={<Camera className="h-4 w-4" />}
+                  title="Photo capture coming soon"
                 >
-                  Add Photo
+                  📷 Add Photo (Coming Soon)
                 </Button>
               </div>
             </CardContent>

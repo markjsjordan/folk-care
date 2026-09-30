@@ -19,7 +19,16 @@ const initRedis = async (): Promise<void> => {
   try {
     // Upstash Redis uses TLS by default (redis:// protocol with TLS enabled)
     // Local Redis typically uses redis:// without TLS
-    const isUpstash = redisUrl.includes('upstash.io');
+    // Use URL parsing to safely check the hostname
+    let isUpstash = false;
+    try {
+      const parsedUrl = new URL(redisUrl);
+      // Strict check: hostname must end with .upstash.io
+      isUpstash = parsedUrl.hostname.endsWith('.upstash.io');
+    } catch {
+      // Invalid URL format - treat as local Redis
+      isUpstash = false;
+    }
 
     const clientOptions: Redis.RedisClientOptions = {
       url: redisUrl,
@@ -210,6 +219,56 @@ export const reportLimiter = rateLimit({
   message: {
     error: 'Too many report requests, please try again later.',
     retryAfter: 60 * 60,
+  },
+});
+
+// Webhook rate limit - 1000 requests per hour per IP
+// Webhooks from external services (Stripe, etc.) should have reasonable limits
+export const webhookLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 1000, // Allow burst traffic from webhooks but prevent abuse
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: getRedisStore('rl:webhook:'),
+  // Disable validation warnings for proxied requests
+  validate: { xForwardedForHeader: false, forwardedHeader: false },
+  message: {
+    error: 'Webhook rate limit exceeded',
+    retryAfter: 60 * 60,
+  },
+});
+
+// CSRF token endpoint rate limit - 60 requests per 5 minutes per IP
+// Prevents token harvesting attacks
+export const csrfTokenLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: getRedisStore('rl:csrf:'),
+  validate: { xForwardedForHeader: false, forwardedHeader: false },
+  message: {
+    error: 'Too many CSRF token requests',
+    retryAfter: 5 * 60,
+  },
+});
+
+// Mobile API rate limit - 300 requests per 5 minutes per user
+// Mobile apps may make many requests during active use
+export const mobileLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req): string => {
+    const userId = (req as { user?: { id?: string } }).user?.id;
+    return userId ?? ipKeyGenerator(req.ip ?? 'unknown');
+  },
+  store: getRedisStore('rl:mobile:'),
+  validate: { xForwardedForHeader: false, forwardedHeader: false },
+  message: {
+    error: 'Mobile API rate limit exceeded',
+    retryAfter: 5 * 60,
   },
 });
 

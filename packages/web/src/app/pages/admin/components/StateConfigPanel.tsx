@@ -119,9 +119,13 @@ export const StateConfigPanel: React.FC = () => {
   };
 
   const handleSave = () => {
-    // In production, this would call an API to save the configuration
-    console.log('Saving state configurations:', configs);
-    setUnsavedChanges(false);
+    // FEATURE COMING SOON: EVV configuration API not yet implemented
+    // Currently deferred pending:
+    // 1. Backend API endpoint for /api/admin/state-evv-configs
+    // 2. Persistence to database
+    // 3. Validation rules per state aggregator
+    // 4. Audit logging for compliance changes
+    alert('⏳ State Configuration Persistence is coming soon.\n\nWe are building the backend API to save and validate state-specific EVV rules.');
   };
 
   const handleReset = () => {
@@ -163,10 +167,11 @@ export const StateConfigPanel: React.FC = () => {
           <Button
             variant="primary"
             onClick={handleSave}
-            disabled={!unsavedChanges}
+            disabled
+            title="State configuration save feature coming soon"
           >
             <Save className="h-4 w-4 mr-2" />
-            Save Changes
+            Save Changes (Coming Soon)
           </Button>
         </div>
       </div>

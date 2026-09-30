@@ -21,7 +21,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   };
 
   const handleAddRealData = () => {
-    navigate('/clients/new');
+    navigate('/clients/intake');
   };
 
   // Show banner for demo accounts OR organizations with demo data

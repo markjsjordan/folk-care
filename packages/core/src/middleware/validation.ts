@@ -7,26 +7,53 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { z, type ZodType, ZodError } from 'zod';
+import sanitizeHtml from 'sanitize-html';
 
 /**
- * Sanitize strings to prevent XSS attacks
- * Removes potentially dangerous HTML/JavaScript
+ * Dangerous URI protocols that can execute code.
+ * Must be stripped before any other sanitization.
+ * Note: These strings are used for pattern matching/removal, not for code execution.
+ */
+/* eslint-disable sonarjs/code-eval -- These are patterns to BLOCK, not execute */
+const DANGEROUS_URI_PROTOCOLS = [
+  'javascript:', // XSS via href/src attributes
+  'data:text/html', // XSS via embedded HTML
+  'data:application', // potential binary exploits
+  'vbscript:', // IE legacy XSS
+];
+/* eslint-enable sonarjs/code-eval */
+
+/**
+ * Sanitize a string to prevent XSS attacks.
+ * 1. First strips dangerous URI protocols (javascript:, data:, etc.)
+ * 2. Then uses sanitize-html to handle nested HTML tags
  */
 function sanitizeString(str: string): string {
-  // Remove script tags and their content
-  let sanitized = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  let result = str;
 
-  // Remove event handlers (onclick, onerror, etc.)
-  sanitized = sanitized.replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '');
-  sanitized = sanitized.replace(/\bon\w+\s*=\s*[^\s>]*/gi, '');
+  // Strip dangerous URI protocols (case-insensitive)
+  // Loop until no more protocols are found to handle nested/obfuscated attempts
+  let hasProtocol = true;
+  while (hasProtocol) {
+    hasProtocol = false;
+    for (const protocol of DANGEROUS_URI_PROTOCOLS) {
+      const lowerResult = result.toLowerCase();
+      const index = lowerResult.indexOf(protocol.toLowerCase());
+      if (index !== -1) {
+        // Remove the protocol prefix to neutralize it
+        // This handles javascript:alert(...), data:text/html,..., etc.
+        result = result.slice(0, index) + result.slice(index + protocol.length);
+        hasProtocol = true;
+      }
+    }
+  }
 
-  // Remove javascript: protocol
-  sanitized = sanitized.replace(/javascript:/gi, '');
-
-  // Remove data: protocol for potential data URIs
-  sanitized = sanitized.replace(/data:text\/html/gi, '');
-
-  return sanitized;
+  // Use sanitize-html with strict settings - strip ALL HTML
+  return sanitizeHtml(result, {
+    allowedTags: [], // No HTML tags allowed
+    allowedAttributes: {}, // No attributes allowed
+    disallowedTagsMode: 'recursiveEscape', // Escape nested tags properly
+  });
 }
 
 /**

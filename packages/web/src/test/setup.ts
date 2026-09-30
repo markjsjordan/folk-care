@@ -1,4 +1,4 @@
-import { afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import '@vitest/browser/matchers';
 import '@testing-library/jest-dom/vitest';
@@ -10,6 +10,40 @@ vi.mock('@sentry-internal/node-cpu-profiler', () => ({}));
 // Cleanup after each test case
 afterEach(() => {
   cleanup();
+});
+
+/**
+ * Guard against a transient happy-dom environment teardown race where the
+ * global `localStorage` can briefly be undefined at the start of a test
+ * file, most often under concurrent test execution (e.g. `turbo run test`
+ * across the whole monorepo). happy-dom is expected to always provide a
+ * working localStorage; if it's missing, install an in-memory polyfill so
+ * tests that call `localStorage.setItem/getItem/removeItem` directly in
+ * `beforeEach` don't crash with "Cannot read properties of undefined".
+ */
+beforeEach(() => {
+  if (typeof globalThis.localStorage === 'undefined') {
+    const memoryStorage = new Map<string, string>();
+    const polyfill: Storage = {
+      get length() {
+        return memoryStorage.size;
+      },
+      clear: () => memoryStorage.clear(),
+      getItem: (key: string) => memoryStorage.get(key) ?? null,
+      key: (index: number) => Array.from(memoryStorage.keys())[index] ?? null,
+      removeItem: (key: string) => {
+        memoryStorage.delete(key);
+      },
+      setItem: (key: string, value: string) => {
+        memoryStorage.set(key, value);
+      },
+    };
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: polyfill,
+      writable: true,
+      configurable: true,
+    });
+  }
 });
 
 // Mock window.matchMedia

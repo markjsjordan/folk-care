@@ -35,7 +35,7 @@ jobs:
     name: Auto-label by Content
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/labeler@v5
+      - uses: actions/labeler@v6
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           configuration-path: .github/labeler.yml
@@ -62,7 +62,7 @@ jobs:
 
       - name: Get CI status
         id: ci_status
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { data: checkRuns } = await github.rest.checks.listForRef({
@@ -101,7 +101,7 @@ jobs:
             return summary;
 
       - name: Comment PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const summary = ${{ toJSON(steps.ci_status.outputs.result) }};
@@ -143,7 +143,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: amannn/action-semantic-pull-request@v5
+      - uses: amannn/action-semantic-pull-request@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

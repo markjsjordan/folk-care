@@ -9,6 +9,8 @@ import React from 'react';
 // Export conflict resolution modal
 export { ConflictResolutionModal } from './ConflictResolutionModal';
 export { OfflineIndicator } from './OfflineIndicator';
+export { PrioritizedTaskList } from './care-plans/PrioritizedTaskList';
+export { MedicationInteractionAlerts } from './medications/MedicationInteractionAlerts';
 import {
   Pressable,
   Text,

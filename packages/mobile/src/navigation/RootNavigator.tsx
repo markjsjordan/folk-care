@@ -31,6 +31,11 @@ import { SignatureScreen } from '../screens/visits/SignatureScreen';
 import { PhotoGalleryScreen } from '../screens/visits/PhotoGalleryScreen';
 import { VisitNotesScreen } from '../screens/visits/VisitNotesScreen';
 import { SyncStatusScreen } from '../screens/profile/SyncStatusScreen';
+import MedicationAdministrationScreen from '../screens/medications/MedicationAdministrationScreen';
+import IncidentReportScreen from '../screens/incidents/IncidentReportScreen';
+import { CarePlanScreen } from '../screens/careplan/CarePlanScreen';
+import { TrainingScreen } from '../screens/training/TrainingScreen';
+import { DirectDepositScreen } from '../screens/payroll/DirectDepositScreen';
 
 export type RootStackParamList = {
   Auth: undefined;
@@ -60,6 +65,21 @@ export type RootStackParamList = {
     evvRecordId?: string;
   };
   SyncStatus: undefined;
+  MedicationAdministration: {
+    visitId: string;
+    clientName: string;
+    clientId: string;
+  };
+  IncidentReport: {
+    visitId: string;
+    clientId: string;
+    clientName: string;
+  };
+  CarePlan: {
+    clientId: string;
+  };
+  Training: undefined;
+  DirectDeposit: undefined;
 };
 
 export type MainTabParamList = {
@@ -229,6 +249,42 @@ export function RootNavigator({ isAuthenticated }: { isAuthenticated: boolean })
               component={SyncStatusScreen}
               options={{
                 title: 'Sync Status',
+              }}
+            />
+            <RootStack.Screen
+              name="MedicationAdministration"
+              component={MedicationAdministrationScreen}
+              options={{
+                title: 'Medications',
+              }}
+            />
+            <RootStack.Screen
+              name="IncidentReport"
+              component={IncidentReportScreen}
+              options={{
+                title: 'Report Incident',
+                presentation: 'modal',
+              }}
+            />
+            <RootStack.Screen
+              name="CarePlan"
+              component={CarePlanScreen}
+              options={{
+                title: 'Care Plan',
+              }}
+            />
+            <RootStack.Screen
+              name="Training"
+              component={TrainingScreen}
+              options={{
+                title: 'Training',
+              }}
+            />
+            <RootStack.Screen
+              name="DirectDeposit"
+              component={DirectDepositScreen}
+              options={{
+                title: 'Direct Deposit',
               }}
             />
           </>

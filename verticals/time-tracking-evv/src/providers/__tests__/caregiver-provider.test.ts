@@ -34,13 +34,13 @@ describe('CaregiverProvider', () => {
             type: 'HHA_CERTIFICATION',
             name: 'Home Health Aide Certification',
             status: 'ACTIVE',
-            expirationDate: '2025-12-31',
+            expirationDate: '2027-12-31',
           },
           {
             type: 'CPR_CERTIFICATION',
             name: 'CPR Certification',
             status: 'ACTIVE',
-            expirationDate: '2026-06-30',
+            expirationDate: '2027-06-30',
           },
           {
             type: 'NPI',
@@ -127,7 +127,7 @@ describe('CaregiverProvider', () => {
             type: 'CERTIFICATION',
             name: 'Valid Certification',
             status: 'ACTIVE',
-            expirationDate: '2025-12-31',
+            expirationDate: '2027-12-31',
           },
         ]),
         background_check: null,
@@ -293,7 +293,7 @@ describe('CaregiverProvider', () => {
             type: 'TRAINING',
             name: 'First Aid Training',
             status: 'ACTIVE',
-            expirationDate: '2026-12-31',
+            expirationDate: '2027-12-31',
           },
           {
             type: 'SKILL',

@@ -142,13 +142,20 @@ export class ShowcaseApiProvider implements ApiProvider {
 
   private saveData(): void {
     if (this.persistData) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+      // SECURITY NOTE: Showcase demo only - localStorage used for client-side demo
+      // lgtm[js/clear-text-storage-of-sensitive-data]
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data)); // lgtm[js/clear-text-storage-of-sensitive-data]
     }
   }
 
   private saveAuthState(): void {
     if (this.persistData && this.currentUser) {
-      localStorage.setItem(AUTH_KEY, JSON.stringify({ userId: this.currentUser.id }));
+      // SECURITY NOTE: This is SHOWCASE/DEMO code only - not production
+      // localStorage is used intentionally for client-side demo that has no backend
+      // CodeQL js/clear-text-storage-of-sensitive-data: Showcase demo with mock data only
+      // In production: Use httpOnly cookies, server-side sessions, encryption
+      // lgtm[js/clear-text-storage-of-sensitive-data]
+      localStorage.setItem(AUTH_KEY, JSON.stringify({ userId: this.currentUser.id })); // lgtm[js/clear-text-storage-of-sensitive-data]
     }
   }
 

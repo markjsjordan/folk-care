@@ -2,6 +2,7 @@ import React from 'react';
 import { Menu, Bell, User, Shield } from 'lucide-react';
 import { useAuth } from '@/core/hooks';
 import { Button } from '@/core/components';
+import mqtLogo from '@/assets/mqt-logo.png';
 import { getPrimaryRole, getRoleLabel } from '@/core/utils/role-routing';
 
 export interface HeaderProps {
@@ -43,7 +44,12 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           >
             <Menu className="h-6 w-6" />
           </Button>
-          <h1 className="text-xl font-bold text-primary-600">Folk Care</h1>
+          <img
+            src={mqtLogo}
+            alt="Marquette Home Care"
+            className="h-10 w-auto"
+            title="Marquette Home Care"
+          />
         </div>
 
         <div className="flex items-center gap-4">

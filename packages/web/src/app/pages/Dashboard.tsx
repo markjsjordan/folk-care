@@ -19,7 +19,7 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleSkipDemo = () => {
-    navigate('/clients/new');
+    navigate('/clients/intake');
   };
 
   // Show loading state while checking demo data status

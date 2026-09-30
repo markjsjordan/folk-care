@@ -1,5 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { useAuth } from './core/hooks';
@@ -15,9 +17,13 @@ import { InvoiceList, InvoiceDetail } from './verticals/billing-invoicing';
 import { PayrollDashboard, PayRunList, PayRunDetail } from './verticals/payroll-processing';
 import { OpenShiftList, OpenShiftDetail } from './verticals/shift-matching';
 import { VisitList, CalendarView } from './verticals/scheduling-visits';
+import ScheduleBuilderPage from './pages/scheduling/ScheduleBuilderPage';
 import { MedicationListPage } from './pages/medications/MedicationListPage';
 import { IncidentListPage } from './pages/incidents/IncidentListPage';
 import { CreateIncidentPage } from './pages/incidents/CreateIncidentPage';
+import BulkNotificationsPage from './pages/coordinators/BulkNotificationsPage';
+import ClientIntakeWorkflow from './pages/clients/ClientIntakeWorkflow';
+import CaregiverTrainingDashboard from './pages/caregivers/CaregiverTrainingDashboard';
 import { AdminDashboard as AnalyticsAdminDashboard, CoordinatorDashboard, ReportsPage } from './app/pages/analytics';
 import { QADashboard, AuditsPage, AuditDetailPage, CorrectiveActionsPage } from './verticals/quality-assurance';
 import { CaregiverList } from './verticals/caregivers';
@@ -151,6 +157,18 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/clients/intake"
+        element={
+          <ProtectedRoute
+            requiredRoles={['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_ADMIN', 'ADMIN', 'COORDINATOR']}
+          >
+            <AppShell>
+              <ClientIntakeWorkflow />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/clients/dashboard"
         element={
           <ProtectedRoute>
@@ -166,6 +184,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppShell>
               <ClientDetail />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/clients/new/intake"
+        element={
+          <ProtectedRoute permission="clients:write">
+            <AppShell>
+              <ClientIntakeWorkflow />
             </AppShell>
           </ProtectedRoute>
         }
@@ -211,6 +239,16 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/caregivers/:id/training"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <CaregiverTrainingDashboard />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/scheduling"
         element={
           <ProtectedRoute>
@@ -226,6 +264,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppShell>
               <CalendarView />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/scheduling/builder"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <ScheduleBuilderPage />
             </AppShell>
           </ProtectedRoute>
         }
@@ -549,6 +597,18 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/coordinators/notifications"
+        element={
+          <ProtectedRoute
+            requiredRoles={['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_ADMIN', 'ADMIN', 'COORDINATOR']}
+          >
+            <AppShell>
+              <BulkNotificationsPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/settings/*"
         element={
           <ProtectedRoute>
@@ -596,6 +656,8 @@ function App() {
         <AppRoutes />
         <Toaster position="top-right" />
       </BrowserRouter>
+      <Analytics />
+      <SpeedInsights />
     </QueryClientProvider>
   );
 }
