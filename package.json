@@ -100,7 +100,7 @@
     "@types/supertest": "^6.0.3",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
-    "@vitejs/plugin-react": "^5.1.1",
+    "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^4.0.13",
     "chalk": "^5.6.2",
     "concurrently": "^9.2.1",
