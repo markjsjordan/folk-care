@@ -20,17 +20,22 @@ async function showMigrationStatus() {
     ? (process.env.DB_NAME || 'folkcare') + '_test'
     : process.env.DB_NAME || 'folkcare';
 
+  // Build connection config
+  const connection = process.env.DATABASE_URL
+    ? { connectionString: process.env.DATABASE_URL }
+    : {
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '5432'),
+        database: dbName,
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || 'postgres',
+        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      };
+
   // Build Knex config inline to avoid tsconfig issues
   const config: Knex.Config = {
     client: 'postgresql',
-    connection: {
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      database: dbName,
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-    },
+    connection,
     migrations: {
       directory: './packages/core/migrations',
       tableName: 'knex_migrations',
@@ -43,6 +48,15 @@ async function showMigrationStatus() {
   const db = knex(config);
 
   try {
+    // Normalize migration extensions in knex_migrations if previously recorded with .js
+    const hasMigrationsTable = await db.schema.hasTable('knex_migrations');
+    if (hasMigrationsTable) {
+      await db.raw(`
+        UPDATE knex_migrations 
+        SET name = regexp_replace(name, '\\.js$', '.ts') 
+        WHERE name LIKE '%.js';
+      `);
+    }
     // Get migration status
     const [completed, pending] = await db.migrate.list();
 
