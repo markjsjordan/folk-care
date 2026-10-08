@@ -18,7 +18,9 @@ import { CaregiverManagementPage } from './pages/CaregiverManagementPage';
 import { ShiftMatchingPage } from './pages/ShiftMatchingPage';
 import { BillingPage } from './pages/BillingPage';
 import { SchedulingPage } from './pages/SchedulingPage';
+import { VisitDetailPage } from './pages/VisitDetailPage';
 import { EVVPage } from './pages/EVVPage';
+
 import { PayrollPage } from './pages/PayrollPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { QualityAssurancePage } from './pages/QualityAssurancePage';
@@ -68,7 +70,10 @@ export const App: React.FC = () => {
                 <Route path="/tasks" element={<TaskManagementPage />} />
                 <Route path="/caregivers" element={<CaregiverManagementPage />} />
                 <Route path="/scheduling" element={<SchedulingPage />} />
+                <Route path="/scheduling/visits/:id" element={<VisitDetailPage />} />
+                <Route path="/visits/:id" element={<VisitDetailPage />} />
                 <Route path="/shifts" element={<ShiftMatchingPage />} />
+
                 <Route path="/evv" element={<EVVPage />} />
                 <Route path="/payroll" element={<PayrollPage />} />
                 <Route path="/billing" element={<BillingPage />} />

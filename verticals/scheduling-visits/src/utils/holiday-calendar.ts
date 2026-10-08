@@ -113,14 +113,20 @@ function getLastWeekdayOfMonth(year: number, month: number, weekday: number): Da
  * @returns true if the date is a federal holiday
  */
 export function isFederalHoliday(date: Date): boolean {
-  const year = date.getFullYear();
-  const holidays = calculateFederalHolidays(year);
-  
-  return holidays.some(holiday => 
-    holiday.getFullYear() === date.getFullYear() &&
-    holiday.getMonth() === date.getMonth() &&
-    holiday.getDate() === date.getDate()
-  );
+  const years = new Set([date.getFullYear(), date.getUTCFullYear()]);
+  for (const year of years) {
+    const holidays = calculateFederalHolidays(year);
+    const matches = holidays.some(holiday => 
+      (holiday.getFullYear() === date.getFullYear() &&
+       holiday.getMonth() === date.getMonth() &&
+       holiday.getDate() === date.getDate()) ||
+      (holiday.getFullYear() === date.getUTCFullYear() &&
+       holiday.getMonth() === date.getUTCMonth() &&
+       holiday.getDate() === date.getUTCDate())
+    );
+    if (matches) return true;
+  }
+  return false;
 }
 
 /**

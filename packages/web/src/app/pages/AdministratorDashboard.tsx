@@ -25,6 +25,7 @@ import {
   Activity,
   Award,
   CreditCard,
+  FileSpreadsheet,
 } from 'lucide-react';
 import {
   useOperationalKPIs,
@@ -342,6 +343,12 @@ export const AdministratorDashboard: React.FC = () => {
       description: 'Analytics and compliance reports',
       icon: <FileText className="h-5 w-5" />,
       onClick: () => navigate('/analytics/reports'),
+    },
+    {
+      title: 'Bulk Import / Export',
+      description: 'Import CSV records & regulatory audit packs',
+      icon: <FileSpreadsheet className="h-5 w-5" />,
+      onClick: () => navigate('/admin/data'),
     },
     {
       title: 'System Activity',

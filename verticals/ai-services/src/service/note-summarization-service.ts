@@ -18,6 +18,9 @@ import type {
   DailySummary,
   KeywordExtractionResult,
   AIServiceConfig,
+  NoteAutofillInput,
+  NoteAutofillSuggestions,
+  NoteContextRecord,
 } from '../types/ai-types.js';
 
 /**
@@ -313,6 +316,187 @@ ${content}
     return {
       size: this.summaryCache.size,
       maxAge: this.config.cacheTTLSeconds,
+    };
+  }
+
+  /**
+   * Generate note autofill suggestions based on previous notes and visit context
+   */
+  async generateAutofillSuggestions(input: NoteAutofillInput): Promise<NoteAutofillSuggestions> {
+    const previousNotes = input.previousNotes ?? [];
+    const analyzedCount = previousNotes.length;
+    const nowIso = new Date().toISOString();
+
+    const fromDate = (previousNotes.length > 0 && previousNotes[previousNotes.length - 1]?.createdAt !== undefined && previousNotes[previousNotes.length - 1]?.createdAt !== '')
+      ? (previousNotes[previousNotes.length - 1]?.createdAt ?? nowIso)
+      : nowIso;
+    const toDate = (previousNotes.length > 0 && previousNotes[0]?.createdAt !== undefined && previousNotes[0]?.createdAt !== '')
+      ? (previousNotes[0]?.createdAt ?? nowIso)
+      : nowIso;
+
+    // Collect historical activities
+    const activityCounts = new Map<string, number>();
+    const moodCounts = new Map<string, number>();
+
+    for (const note of previousNotes) {
+      if (Array.isArray(note.activitiesPerformed)) {
+        for (const act of note.activitiesPerformed) {
+          if (typeof act === 'string' && act.trim() !== '') {
+            activityCounts.set(act.trim(), (activityCounts.get(act.trim()) ?? 0) + 1);
+          }
+        }
+      }
+      if (typeof note.clientMood === 'string' && note.clientMood.trim() !== '') {
+        moodCounts.set(note.clientMood.trim(), (moodCounts.get(note.clientMood.trim()) ?? 0) + 1);
+      }
+    }
+
+    const sortedActivities = Array.from(activityCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([act]) => act);
+
+    let mostCommonMood: string | undefined = undefined;
+    let maxMoodCount = 0;
+    for (const [mood, count] of moodCounts.entries()) {
+      if (count > maxMoodCount) {
+        maxMoodCount = count;
+        mostCommonMood = mood;
+      }
+    }
+
+    // Default activity templates by service type
+    const serviceType = (input.serviceTypeName ?? '').toLowerCase();
+    let defaultActivities: string[] = [
+      'Assisted with morning hygiene and grooming',
+      'Assisted with meal preparation and hydration',
+      'Mobility and transfer assistance provided',
+      'Light housekeeping and safety check completed',
+    ];
+
+    if (serviceType.includes('nurs') || serviceType.includes('sn')) {
+      defaultActivities = [
+        'Vital signs measured and documented within baseline',
+        'Medication administration and compliance verified',
+        'Physical assessment and wound evaluation performed',
+        'Client and caregiver education provided on care plan',
+      ];
+    } else if (serviceType.includes('phys') || serviceType.includes('pt')) {
+      defaultActivities = [
+        'Gait and balance exercises completed',
+        'Active and passive range of motion performed',
+        'Therapeutic exercise program completed',
+        'Home mobility and fall prevention evaluated',
+      ];
+    } else if (serviceType.includes('occup') || serviceType.includes('ot')) {
+      defaultActivities = [
+        'Activities of daily living (ADL) adaptive training',
+        'Fine motor and upper extremity exercises completed',
+        'Adaptive equipment usage review and guidance',
+        'Energy conservation techniques reviewed',
+      ];
+    } else if (serviceType.includes('speech') || serviceType.includes('st')) {
+      defaultActivities = [
+        'Swallow safety and aspiration precautions reviewed',
+        'Speech articulation and vocal production exercises',
+        'Cognitive-linguistic rehabilitation tasks performed',
+        'Caregiver communication strategies provided',
+      ];
+    } else if (serviceType.includes('aide') || serviceType.includes('hha')) {
+      defaultActivities = [
+        'Personal hygiene, bathing, and grooming assistance',
+        'Skin integrity inspection and pressure relief positioning',
+        'Nutritional support and meal assistance completed',
+        'Safe ambulation assistance with assistive device',
+      ];
+    }
+
+    const suggestedActivities = sortedActivities.length > 0
+      ? Array.from(new Set([...sortedActivities, ...defaultActivities])).slice(0, 6)
+      : defaultActivities;
+
+    const commonPhrases = [
+      'Client was alert, oriented, and receptive to care.',
+      'Care plan interventions completed without incident.',
+      'Client tolerated all scheduled care activities well.',
+      'Living environment inspected; no safety hazards observed.',
+      'Vital signs and general condition remained stable throughout visit.',
+    ];
+
+    const clientDisplayName = (input.clientName != null && input.clientName !== '') ? input.clientName : 'Client';
+    const noteStarter = `Arrived for scheduled visit with ${clientDisplayName}. Client was comfortable and greeted caregiver warmly. Care plan tasks initiated promptly.`;
+
+    // Try Claude AI if API key is provided and not empty
+    if (this.config.anthropicApiKey !== '' && this.config.anthropicApiKey !== 'mock' && previousNotes.length > 0) {
+      try {
+        const notesSummary = previousNotes.slice(0, 5).map((n: NoteContextRecord, i: number) =>
+          `Note ${i + 1} (${n.createdAt ?? 'recent'}): ${n.noteText ?? ''} [Activities: ${(n.activitiesPerformed ?? []).join(', ')}] [Mood: ${n.clientMood ?? 'unknown'}]`
+        ).join('\n');
+
+        const prompt = `You are a clinical documentation assistant for a home healthcare agency.
+Analyze these recent visit notes for client "${clientDisplayName}" and generate autofill suggestions for the upcoming visit note.
+Service Type: ${input.serviceTypeName ?? 'Home Care'}
+Date: ${input.scheduledDate ?? 'Today'}
+
+Recent Notes:
+${notesSummary}
+
+Return a valid JSON object matching:
+{
+  "suggestedActivities": string[],
+  "suggestedMood": string,
+  "commonPhrases": string[],
+  "noteStarter": string
+}
+Return JSON ONLY, without markdown fences or additional commentary.`;
+
+        const message = await this.client.messages.create({
+          model: 'claude-3-5-haiku-20241022',
+          max_tokens: 512,
+          temperature: 0.2,
+          messages: [{ role: 'user', content: prompt }],
+        });
+
+        const firstBlock = message.content[0];
+        const responseText = firstBlock != null && firstBlock.type === 'text' ? firstBlock.text.trim() : '{}';
+        const cleaned = responseText.replace(/^```json/i, '').replace(/```$/i, '').trim();
+        const parsed = JSON.parse(cleaned) as Partial<NoteAutofillSuggestions>;
+
+        if (Array.isArray(parsed.suggestedActivities) && parsed.suggestedActivities.length > 0) {
+          return {
+            suggestedActivities: parsed.suggestedActivities,
+            suggestedMood: (typeof parsed.suggestedMood === 'string' && parsed.suggestedMood !== '')
+              ? parsed.suggestedMood
+              : (mostCommonMood ?? 'Pleasant & cooperative'),
+            commonPhrases: (Array.isArray(parsed.commonPhrases) && parsed.commonPhrases.length > 0)
+              ? parsed.commonPhrases
+              : commonPhrases,
+            noteStarter: (typeof parsed.noteStarter === 'string' && parsed.noteStarter !== '')
+              ? parsed.noteStarter
+              : noteStarter,
+            analyzedNotesCount: analyzedCount,
+            dateRange: {
+              from: fromDate,
+              to: toDate,
+            },
+            generatedAt: nowIso,
+          };
+        }
+      } catch (aiErr) {
+        console.warn('AI suggestions generation fell back to heuristic aggregation:', aiErr);
+      }
+    }
+
+    return {
+      suggestedActivities,
+      suggestedMood: mostCommonMood ?? 'Pleasant & cooperative',
+      commonPhrases,
+      noteStarter,
+      analyzedNotesCount: analyzedCount,
+      dateRange: {
+        from: fromDate,
+        to: toDate,
+      },
+      generatedAt: nowIso,
     };
   }
 }

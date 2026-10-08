@@ -15,6 +15,10 @@ import {
   parseCsv,
   Database,
   UserContext,
+  DuplicateMatch,
+  ImportPreviewRow,
+  ImportPreviewResult,
+  CommitImportResult,
 } from '@folkcare/core';
 import { Client, CreateClientInput, ClientStatus, Gender } from '../types/client.js';
 import { ClientRepository } from '../repository/client-repository.js';
@@ -69,8 +73,10 @@ export interface ClientImportRow {
 export class ClientImportService implements ImportService<ClientImportRow, Client> {
   private repository: ClientRepository;
   private validator: ClientValidator;
+  private database: Database;
 
   constructor(database: Database) {
+    this.database = database;
     this.repository = new ClientRepository(database);
     this.validator = new ClientValidator();
   }
@@ -647,4 +653,292 @@ export class ClientImportService implements ImportService<ClientImportRow, Clien
     const phoneRegex = /^[\d\s\-()+ ]+$/; // eslint-disable-line sonarjs/duplicates-in-character-class
     return phoneRegex.test(phone) && phone.replace(/\D/g, '').length >= 10;
   }
+
+  /**
+   * Phase 1: Validate file records, detect duplicates, and generate preview
+   */
+  async validateAndPreview(
+    records: ClientImportRow[],
+    options: ImportOptions,
+    detectedHeaders?: string[],
+    mappings?: Record<string, string>
+  ): Promise<ImportPreviewResult<ClientImportRow>> {
+    const rows: ImportPreviewRow<ClientImportRow>[] = [];
+    let validCount = 0;
+    let errorCount = 0;
+    let warningCount = 0;
+    let duplicateCount = 0;
+
+    const duplicateMap = await this.findDuplicates(records, options.organizationId);
+
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i]!;
+      const rowNumber = i + 2;
+
+      const validationErrors = await this.validateRecord(record, rowNumber);
+
+      try {
+        const clientInput = this.mapRowToInput(record, options.organizationId);
+        const schemaValidation = this.validator.validateCreate(clientInput);
+        if (!schemaValidation.success && schemaValidation.errors) {
+          for (const err of schemaValidation.errors) {
+            const fieldPath = Array.isArray(err.path) ? err.path.join('.') : String(err.path);
+            if (!validationErrors.some((e) => e.field === fieldPath)) {
+              validationErrors.push({
+                row: rowNumber,
+                field: fieldPath,
+                message: err.message,
+                severity: 'ERROR',
+              });
+            }
+          }
+        }
+      } catch (err) {
+        validationErrors.push({
+          row: rowNumber,
+          message: `Mapping error: ${err instanceof Error ? err.message : String(err)}`,
+          severity: 'ERROR',
+        });
+      }
+
+      const hasFatalErrors = validationErrors.some((e) => e.severity === 'ERROR');
+      const duplicate = duplicateMap.get(i);
+
+      let status: 'VALID' | 'WARNING' | 'ERROR' | 'DUPLICATE';
+      if (hasFatalErrors) {
+        status = 'ERROR';
+        errorCount++;
+      } else if (duplicate) {
+        status = 'DUPLICATE';
+        duplicateCount++;
+      } else if (validationErrors.some((e) => e.severity === 'WARNING')) {
+        status = 'WARNING';
+        warningCount++;
+        validCount++;
+      } else {
+        status = 'VALID';
+        validCount++;
+      }
+
+      rows.push({
+        rowNumber,
+        data: record,
+        status,
+        errors: validationErrors,
+        duplicate,
+        isDuplicate: Boolean(duplicate),
+      });
+    }
+
+    return {
+      phase: 'preview',
+      totalRows: records.length,
+      validCount,
+      errorCount,
+      warningCount,
+      duplicateCount,
+      headers: detectedHeaders ?? Object.keys(records[0] ?? {}),
+      mappings: mappings ?? {},
+      rows,
+      canCommit: validCount > 0 || (duplicateCount > 0 && Boolean(options.updateExisting)),
+    };
+  }
+
+  /**
+   * Find duplicates against existing database records
+   */
+  private async findDuplicates(
+    records: ClientImportRow[],
+    organizationId: string
+  ): Promise<Map<number, DuplicateMatch>> {
+    const duplicateMap = new Map<number, DuplicateMatch>();
+    if (records.length === 0) return duplicateMap;
+
+    const clientNumbers = records
+      .map((r) => r.client_number?.trim())
+      .filter((cn): cn is string => Boolean(cn));
+
+    const emails = records
+      .map((r) => r.email?.trim().toLowerCase())
+      .filter((e): e is string => Boolean(e));
+
+    const queryParts: string[] = ['organization_id = $1', 'deleted_at IS NULL'];
+    const params: unknown[] = [organizationId];
+
+    if (clientNumbers.length > 0 || emails.length > 0) {
+      const orClauses: string[] = [];
+      if (clientNumbers.length > 0) {
+        params.push(clientNumbers);
+        orClauses.push(`client_number = ANY($${params.length})`);
+      }
+      if (emails.length > 0) {
+        params.push(emails);
+        orClauses.push(`LOWER(email) = ANY($${params.length})`);
+      }
+      queryParts.push(`(${orClauses.join(' OR ')})`);
+
+      try {
+        const query = `
+          SELECT id, client_number, first_name, last_name, date_of_birth, email, ssn
+          FROM clients
+          WHERE ${queryParts.join(' AND ')}
+        `;
+        const result = await this.database.query(query, params);
+        const existingClients = result.rows as unknown as Array<{
+          id: string;
+          client_number?: string;
+          first_name: string;
+          last_name: string;
+          date_of_birth: Date | string;
+          email?: string;
+          ssn?: string;
+        }>;
+
+        for (let i = 0; i < records.length; i++) {
+          const r = records[i]!;
+          if (r.client_number?.trim()) {
+            const match = existingClients.find(
+              (c) => c.client_number?.toLowerCase() === r.client_number?.trim().toLowerCase()
+            );
+            if (match) {
+              duplicateMap.set(i, {
+                row: i + 2,
+                naturalKey: r.client_number,
+                existingId: match.id,
+                existingLabel: `${match.first_name} ${match.last_name}`,
+                matchReason: `Client number #${r.client_number} already exists in organization`,
+                action: 'SKIP',
+              });
+              continue;
+            }
+          }
+
+          if (r.email?.trim()) {
+            const match = existingClients.find(
+              (c) => c.email && c.email.toLowerCase() === r.email?.trim().toLowerCase()
+            );
+            if (match) {
+              duplicateMap.set(i, {
+                row: i + 2,
+                naturalKey: r.email,
+                existingId: match.id,
+                existingLabel: `${match.first_name} ${match.last_name}`,
+                matchReason: `Email ${r.email} already exists in organization`,
+                action: 'SKIP',
+              });
+              continue;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Duplicate check query warning:', err);
+      }
+    }
+
+    return duplicateMap;
+  }
+
+  /**
+   * Phase 2: Confirm & commit records into database inside a single transaction
+   */
+  async commitTransaction(
+    records: ClientImportRow[],
+    options: ImportOptions,
+    externalTxDb?: Database
+  ): Promise<CommitImportResult> {
+    const doCommit = async (txDb: Database): Promise<CommitImportResult> => {
+      const txRepo = new ClientRepository(txDb);
+      const errors: ImportError[] = [];
+      const importedIds: string[] = [];
+      let imported = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      const context: UserContext = {
+        userId: options.userId,
+        organizationId: options.organizationId,
+        permissions: ['clients:create', 'clients:update'],
+        roles: ['ADMIN'],
+        branchIds: [],
+      };
+
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i]!;
+        const rowNumber = i + 2;
+
+        const validationErrors = await this.validateRecord(record, rowNumber);
+        if (validationErrors.some((e) => e.severity === 'ERROR')) {
+          errors.push(...validationErrors);
+          skipped++;
+          continue;
+        }
+
+        try {
+          const clientInput = this.mapRowToInput(record, options.organizationId);
+
+          let existingClient: Client | null = null;
+          if (record.client_number) {
+            existingClient = await txRepo.findByClientNumber(
+              record.client_number,
+              options.organizationId
+            );
+          }
+
+          if (existingClient && !options.updateExisting) {
+            skipped++;
+            errors.push({
+              row: rowNumber,
+              message: `Client #${record.client_number || existingClient.id} already exists - skipped`,
+              severity: 'WARNING',
+            });
+          } else if (existingClient && options.updateExisting) {
+            const updateInput = this.mapRowToUpdateInput(record);
+            await txRepo.update(existingClient.id, updateInput, context);
+            importedIds.push(existingClient.id);
+            updated++;
+          } else {
+            const created = await txRepo.create(clientInput, context);
+            importedIds.push(created.id);
+            imported++;
+          }
+        } catch (err) {
+          errors.push({
+            row: rowNumber,
+            message: `Commit error: ${err instanceof Error ? err.message : String(err)}`,
+            severity: 'ERROR',
+          });
+          throw err;
+        }
+      }
+
+      return {
+        success: true,
+        phase: 'committed',
+        imported,
+        updated,
+        skipped,
+        total: records.length,
+        errors,
+        importedIds,
+      };
+    };
+
+    if (externalTxDb) {
+      return await doCommit(externalTxDb);
+    }
+
+    return await this.database.transaction(async (client) => {
+      const txDb = {
+        query: (text: string, params?: unknown[]) => client.query(text, params),
+        getClient: async () => client,
+        transaction: async <T>(cb: (c: typeof client) => Promise<T>) => cb(client),
+        getPool: () => ({}) as any,
+        close: async () => {},
+        healthCheck: async () => true,
+      } as unknown as Database;
+
+      return await doCommit(txDb);
+    });
+  }
 }
+

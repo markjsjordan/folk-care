@@ -119,3 +119,14 @@ export const useShiftMatchingProvider = () => {
     applyToShift: provider.applyToShift.bind(provider),
   };
 };
+
+export const useVisitProvider = () => {
+  const provider = useDataProvider();
+  return {
+    getVisits: provider.getVisits.bind(provider),
+    getVisitById: provider.getVisitById.bind(provider),
+    createVisit: provider.createVisit?.bind(provider),
+    updateVisit: provider.updateVisit?.bind(provider),
+    deleteVisit: provider.deleteVisit?.bind(provider),
+  };
+};
