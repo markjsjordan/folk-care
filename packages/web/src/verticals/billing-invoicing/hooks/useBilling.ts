@@ -2,12 +2,13 @@ import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useApiClient } from '@/core/hooks';
-import { createBillingApiService } from '../services/billing-api';
+import { createBillingApiService, billingErrorMessage } from '../services/billing-api';
 import type { 
   BillingSearchFilters, 
   CreateInvoiceInput, 
-  UpdateInvoiceInput,
-  CreatePaymentInput 
+  UpdateInvoiceInput, 
+  CreatePaymentInput,
+  PayorTypeFilter,
 } from '../types';
 
 export const useBillingApi = () => {
@@ -43,6 +44,15 @@ export const useBillingSummary = (filters?: { startDate?: string; endDate?: stri
   });
 };
 
+export const useClaimsQueue = (filters?: { payor?: PayorTypeFilter; search?: string }) => {
+  const billingApi = useBillingApi();
+
+  return useQuery({
+    queryKey: ['claims-queue', filters],
+    queryFn: () => billingApi.getClaimsQueue(filters),
+  });
+};
+
 export const useInvoicePayments = (invoiceId: string | undefined) => {
   const billingApi = useBillingApi();
 
@@ -62,6 +72,7 @@ export const useCreateInvoice = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['claims-queue'] });
       toast.success('Invoice created successfully');
     },
     onError: (error: Error) => {
@@ -81,6 +92,7 @@ export const useUpdateInvoice = () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['invoices', data.id] });
       queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['claims-queue'] });
       toast.success('Invoice updated successfully');
     },
     onError: (error: Error) => {
@@ -98,6 +110,7 @@ export const useDeleteInvoice = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['claims-queue'] });
       toast.success('Invoice deleted successfully');
     },
     onError: (error: Error) => {
@@ -115,10 +128,62 @@ export const useSendInvoice = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['invoices', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['claims-queue'] });
       toast.success('Invoice sent successfully');
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Failed to send invoice');
+      toast.error(billingErrorMessage(error, 'Failed to send invoice'));
+    },
+  });
+};
+
+export const useTransitionToReadyToSubmit = () => {
+  const billingApi = useBillingApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) => billingApi.transitionToReadyToSubmit(id),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['claims-queue'] });
+      toast.success('EVV verified: Transitioned to READY_TO_SUBMIT');
+    },
+    onError: (error: Error) => {
+      toast.error(billingErrorMessage(error, 'EVV gate rejected: a visit lacks verified EVV data'));
+    },
+  });
+};
+
+export const useGenerateInvoicesForVerifiedVisits = () => {
+  const billingApi = useBillingApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (options?: { payerId?: string; billableItemIds?: string[] }) =>
+      billingApi.generateInvoicesForVerifiedVisits(options),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['claims-queue'] });
+
+      if (data.verifiedVisitsCount > 0) {
+        toast.success(
+          `Generated ${data.generatedInvoices.length} invoices for ${data.verifiedVisitsCount} EVV-verified visits.` +
+          (data.blockedVisitsCount > 0 ? ` (${data.blockedVisitsCount} unverified visits blocked)` : '')
+        );
+      } else {
+        toast.error(
+          data.blockedVisitsCount > 0
+            ? `No verified visits to invoice. ${data.blockedVisitsCount} visit(s) blocked due to incomplete EVV.`
+            : 'No visits are ready to invoice.'
+        );
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(billingErrorMessage(error, 'Failed to generate batch invoices'));
     },
   });
 };
@@ -133,6 +198,7 @@ export const useVoidInvoice = () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['invoices', data.id] });
       queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['claims-queue'] });
       toast.success('Invoice voided successfully');
     },
     onError: (error: Error) => {
@@ -152,6 +218,7 @@ export const useCreatePayment = () => {
       queryClient.invalidateQueries({ queryKey: ['invoices', data.invoiceId] });
       queryClient.invalidateQueries({ queryKey: ['payments'] });
       queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['claims-queue'] });
       toast.success('Payment recorded successfully');
     },
     onError: (error: Error) => {
@@ -166,48 +233,17 @@ export const useDownloadInvoicePdf = () => {
   return useMutation({
     mutationFn: async (id: string) => {
       const blob = await billingApi.generateInvoicePdf(id);
-
-      // Sanitize the id to prevent XSS
       const sanitizedId = id.replace(/[^\w-]/g, '');
-      
-      // Use modern download API without DOM manipulation
-      if ('showSaveFilePicker' in window && typeof window.showSaveFilePicker === 'function') {
-        type FilePickerOptions = {
-          suggestedName: string;
-          types: Array<{
-            description: string;
-            accept: Record<string, string[]>;
-          }>;
-        };
-        
-        type FileSystemFileHandle = {
-          createWritable(): Promise<FileSystemWritableFileStream>;
-        };
-        
-        type FileSystemWritableFileStream = {
-          write(data: globalThis.Blob): Promise<void>;
-          close(): Promise<void>;
-        };
-        
-        const fileHandle = await (window as unknown as {
-          showSaveFilePicker(options: FilePickerOptions): Promise<FileSystemFileHandle>;
-        }).showSaveFilePicker({
-          suggestedName: `invoice-${sanitizedId}.pdf`,
-          types: [{
-            description: 'PDF files',
-            accept: { 'application/pdf': ['.pdf'] }
-          }]
-        });
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-      } else {
-        // Fallback: inform user to use modern browser
-        throw new Error(
-          'PDF download requires a modern browser with File System Access API support. ' +
-          'Please update your browser or contact support for assistance.'
-        );
-      }
+
+      // Create object URL and download
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice-${sanitizedId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     },
     onSuccess: () => {
       toast.success('Invoice PDF downloaded');

@@ -79,6 +79,7 @@ const invoiceFormSchema = z.object({
       'DRAFT',
       'PENDING_REVIEW',
       'APPROVED',
+      'READY_TO_SUBMIT',
       'SENT',
       'SUBMITTED',
       'PARTIALLY_PAID',

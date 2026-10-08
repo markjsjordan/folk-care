@@ -689,7 +689,8 @@ export function validateInvoiceStatusTransition(
   const validTransitions: Record<InvoiceStatus, InvoiceStatus[]> = {
     DRAFT: ['PENDING_REVIEW', 'CANCELLED'],
     PENDING_REVIEW: ['APPROVED', 'DRAFT', 'CANCELLED'],
-    APPROVED: ['SENT', 'SUBMITTED', 'CANCELLED'],
+    APPROVED: ['SENT', 'SUBMITTED', 'READY_TO_SUBMIT', 'CANCELLED'],
+    READY_TO_SUBMIT: ['SUBMITTED', 'CANCELLED'],
     SENT: ['PARTIALLY_PAID', 'PAID', 'PAST_DUE', 'DISPUTED', 'CANCELLED'],
     SUBMITTED: ['PARTIALLY_PAID', 'PAID', 'PAST_DUE', 'DISPUTED'],
     PARTIALLY_PAID: ['PAID', 'PAST_DUE', 'DISPUTED'],
