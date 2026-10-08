@@ -131,6 +131,18 @@ export interface ShiftMatchingDataProvider {
 }
 
 /**
+ * Visit Data Provider
+ * Handles visit scheduling and execution
+ */
+export interface VisitDataProvider {
+  getVisits(filters?: any): Promise<any>;
+  getVisitById(id: string): Promise<any>;
+  createVisit?(input: any): Promise<any>;
+  updateVisit?(id: string, input: any): Promise<any>;
+  deleteVisit?(id: string): Promise<void>;
+}
+
+/**
  * Unified Data Provider
  * Combines all provider interfaces for comprehensive data access
  */
@@ -140,7 +152,8 @@ export interface DataProvider
     CaregiverDataProvider,
     BillingDataProvider,
     PayrollDataProvider,
-    ShiftMatchingDataProvider {
+    ShiftMatchingDataProvider,
+    VisitDataProvider {
   /**
    * Provider metadata
    */

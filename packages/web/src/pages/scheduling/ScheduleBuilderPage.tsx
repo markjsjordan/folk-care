@@ -1,9 +1,13 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useCaregivers } from '@/verticals/caregivers/hooks/useCaregivers';
-import { useCalendarVisits, useVisitApi } from '@/verticals/scheduling-visits/hooks/useVisits';
+import { useCalendarVisits, useVisitApi, useCaregiverAvailability } from '@/verticals/scheduling-visits/hooks/useVisits';
 import type { Visit as ApiVisit } from '@/verticals/scheduling-visits/types';
+import { useClients } from '@/verticals/client-demographics/hooks/useClients';
+import { calculateSupervisoryCadence } from '@/verticals/scheduling-visits/utils/supervisory-cadence';
+import { SupervisionAlertBanner } from '@/verticals/scheduling-visits/components/SupervisionAlertBanner';
 
 interface Caregiver {
   id: string;
@@ -19,6 +23,7 @@ interface Visit {
   clientName: string;
   caregiverId: string | null;
   caregiverName: string | null;
+  patternId?: string | null;
   date: string;
   startTime: string;
   endTime: string;
@@ -74,6 +79,7 @@ function toDisplayVisit(v: ApiVisit, caregiverNameById: Map<string, string>): Vi
     clientName,
     caregiverId: v.assignedCaregiverId ?? null,
     caregiverName: v.assignedCaregiverId != null ? caregiverNameById.get(v.assignedCaregiverId) ?? null : null,
+    patternId: v.patternId ?? null,
     date: dateStr,
     startTime: v.scheduledStartTime,
     endTime: v.scheduledEndTime,
@@ -99,11 +105,39 @@ export default function ScheduleBuilderPage() {
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]!);
   const [draggedVisit, setDraggedVisit] = useState<Visit | null>(null);
   const [viewMode, setViewMode] = useState<'week' | 'day'>('day');
+  const [showPatternModal, setShowPatternModal] = useState(false);
+
+  const [searchParams] = useSearchParams();
+  const initialClientId = searchParams.get('clientId') || '';
+  const initialVisitType = searchParams.get('visitType');
+  const [showSupervisionModal, setShowSupervisionModal] = useState<boolean>(
+    () => initialVisitType === 'SUPERVISION'
+  );
+  const [supervisionClientId] = useState<string>(initialClientId);
 
   const queryClient = useQueryClient();
   const visitApi = useVisitApi();
 
   const weekDates = useMemo(() => getNextWeekDates(), []);
+
+  const { data: clientsResult } = useClients({ page: 1, pageSize: 100 });
+  const clients = useMemo(() => clientsResult?.items ?? [], [clientsResult]);
+
+  const activeSupervisionClient = useMemo(
+    () => clients.find((c) => c.id === supervisionClientId) || clients[0],
+    [clients, supervisionClientId]
+  );
+
+  const supervisionCadence = useMemo(() => {
+    if (!activeSupervisionClient) return null;
+    return calculateSupervisoryCadence({
+      clientId: activeSupervisionClient.id,
+      state: activeSupervisionClient.primaryAddress?.state || 'FL',
+      isSkilledNursing: true,
+      lastSupervisoryVisitDate: activeSupervisionClient.intakeDate || activeSupervisionClient.createdAt,
+      referenceDate: new Date(),
+    });
+  }, [activeSupervisionClient]);
 
   const { data: caregiversResult } = useCaregivers({}, 1, 100);
   const caregivers: Caregiver[] = useMemo(
@@ -181,9 +215,17 @@ export default function ScheduleBuilderPage() {
     });
   };
 
-  // Availability data isn't modeled by the caregiver API; treat all caregivers
-  // as available. Occupied slots are still computed from real visit data.
-  const getCaregiverAvailability = (_caregiverId: string) => true;
+  // Canonical caregiver availability lookup via /api/visits/caregivers/availability
+  const { data: caregiverAvailability } = useCaregiverAvailability(new Date(selectedDate));
+  const availableCaregiverIds = useMemo(() => {
+    if (caregiverAvailability == null || caregiverAvailability.length === 0) return null;
+    return new Set(caregiverAvailability.map(c => c.caregiver_id));
+  }, [caregiverAvailability]);
+
+  const getCaregiverAvailability = useCallback(
+    (caregiverId: string) => availableCaregiverIds == null || availableCaregiverIds.has(caregiverId),
+    [availableCaregiverIds]
+  );
 
   return (
     <div style={styles.container}>
@@ -230,8 +272,35 @@ export default function ScheduleBuilderPage() {
               </option>
             ))}
           </select>
+          <button
+            style={styles.patternButton}
+            onClick={() => setShowPatternModal(true)}
+          >
+            + Recurring Schedule
+          </button>
+          <button
+            style={{
+              ...styles.patternButton,
+              backgroundColor: '#1d4ed8',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: 600,
+            }}
+            onClick={() => setShowSupervisionModal(true)}
+          >
+            Schedule Supervision Visit
+          </button>
         </div>
       </div>
+
+      {supervisionCadence && supervisionCadence.showAlert && (
+        <div style={{ marginBottom: '20px' }}>
+          <SupervisionAlertBanner
+            cadence={supervisionCadence}
+            onSchedule={() => setShowSupervisionModal(true)}
+          />
+        </div>
+      )}
 
       <div style={styles.content}>
         {/* Unassigned visits sidebar */}
@@ -256,6 +325,11 @@ export default function ScheduleBuilderPage() {
                       {visit.startTime} - {visit.endTime}
                     </span>
                   </div>
+                  {visit.patternId && (
+                    <div style={{ marginBottom: '6px' }}>
+                      <span style={styles.recurringBadge}>🔁 Recurring</span>
+                    </div>
+                  )}
                   <div style={styles.visitTasks}>
                     {visit.tasks.map((task, idx) => (
                       <span key={idx} style={styles.taskBadge}>
@@ -342,7 +416,7 @@ export default function ScheduleBuilderPage() {
                             }}
                           >
                             <div style={styles.visitBlockHeader}>
-                              <strong>{visit.clientName}</strong>
+                              <strong>{visit.patternId ? '🔁 ' : ''}{visit.clientName}</strong>
                               <button
                                 onClick={() => handleUnassign(visit.id)}
                                 style={styles.unassignButton}
@@ -388,6 +462,34 @@ export default function ScheduleBuilderPage() {
           <div style={styles.statLabel}>Confirmed</div>
         </div>
       </div>
+
+      {showPatternModal && (
+        <CreateRecurringPatternModal
+          clients={clients}
+          caregivers={caregivers}
+          onClose={() => setShowPatternModal(false)}
+          onSuccess={async (count) => {
+            setShowPatternModal(false);
+            toast.success(`Recurring schedule created! Generated ${count} visits.`);
+            await queryClient.invalidateQueries({ queryKey: ['visits'] });
+            await refetchVisits();
+          }}
+        />
+      )}
+
+      {showSupervisionModal && (
+        <ScheduleSupervisionVisitModal
+          clients={clients}
+          caregivers={caregivers}
+          initialClientId={supervisionClientId}
+          onClose={() => setShowSupervisionModal(false)}
+          onSuccess={async () => {
+            setShowSupervisionModal(false);
+            await queryClient.invalidateQueries({ queryKey: ['visits'] });
+            await refetchVisits();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -617,5 +719,662 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '14px',
     color: '#6b7280',
     marginTop: '4px',
+  },
+  patternButton: {
+    padding: '8px 16px',
+    backgroundColor: '#10b981',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+  },
+  recurringBadge: {
+    fontSize: '11px',
+    backgroundColor: '#ecfdf5',
+    color: '#065f46',
+    padding: '2px 8px',
+    borderRadius: '4px',
+    fontWeight: 600,
+    border: '1px solid #a7f3d0',
+    display: 'inline-block',
+  },
+};
+
+interface CreateRecurringPatternModalProps {
+  clients: Array<{ id: string; firstName: string; lastName: string }>;
+  caregivers: Caregiver[];
+  onClose: () => void;
+  onSuccess: (count: number) => void;
+}
+
+function CreateRecurringPatternModal({
+  clients,
+  caregivers,
+  onClose,
+  onSuccess,
+}: CreateRecurringPatternModalProps) {
+  const visitApi = useVisitApi();
+  const [clientId, setClientId] = useState<string>(clients[0]?.id ?? '');
+  const [customClientName, setCustomClientName] = useState<string>('');
+  const [caregiverId, setCaregiverId] = useState<string>('');
+  const [serviceTypeName, setServiceTypeName] = useState<string>('Personal Care');
+  const [frequency, setFrequency] = useState<string>('WEEKLY');
+  const [selectedDays, setSelectedDays] = useState<string[]>(['MONDAY', 'WEDNESDAY', 'FRIDAY']);
+  const [startTime, setStartTime] = useState<string>('09:00');
+  const [duration, setDuration] = useState<number>(240);
+  const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().split('T')[0]!);
+  const [endDate, setEndDate] = useState<string>(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 3);
+    return d.toISOString().split('T')[0]!;
+  });
+  const [skipHolidays, setSkipHolidays] = useState<boolean>(true);
+  const [notes, setNotes] = useState<string>('');
+  const [submitting, setSubmitting] = useState<boolean>(false);
+
+  const toggleDay = (day: string) => {
+    setSelectedDays(prev =>
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientId && !customClientName) {
+      toast.error('Please select or specify a client');
+      return;
+    }
+    if (frequency === 'WEEKLY' && selectedDays.length === 0) {
+      toast.error('Please select at least one day of the week');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await visitApi.createPattern({
+        clientId: clientId || '00000000-0000-0000-0000-000000000001',
+        caregiverId: caregiverId || undefined,
+        serviceTypeId: '00000000-0000-0000-0000-000000000002',
+        serviceTypeName,
+        frequency,
+        startDate,
+        endDate: endDate || undefined,
+        dayOfWeek: selectedDays,
+        startTime,
+        duration: Number(duration),
+        skipHolidays,
+        notes: notes || undefined,
+        horizonDays: 90,
+      });
+
+      onSuccess(res.generatedVisitsCount ?? 0);
+    } catch (err: any) {
+      console.error('Error creating pattern:', err);
+      toast.error(err?.message || 'Failed to create recurring pattern');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const DAYS = [
+    { label: 'Mon', value: 'MONDAY' },
+    { label: 'Tue', value: 'TUESDAY' },
+    { label: 'Wed', value: 'WEDNESDAY' },
+    { label: 'Thu', value: 'THURSDAY' },
+    { label: 'Fri', value: 'FRIDAY' },
+    { label: 'Sat', value: 'SATURDAY' },
+    { label: 'Sun', value: 'SUNDAY' },
+  ];
+
+  return (
+    <div style={modalStyles.overlay}>
+      <div style={modalStyles.container}>
+        <div style={modalStyles.header}>
+          <div>
+            <h2 style={modalStyles.title}>Create Recurring Schedule</h2>
+            <p style={modalStyles.subtitle}>
+              Generate concrete visits automatically across a rolling horizon
+            </p>
+          </div>
+          <button onClick={onClose} style={modalStyles.closeBtn}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={modalStyles.form}>
+          <div style={modalStyles.formGrid}>
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Client *</label>
+              {clients.length > 0 ? (
+                <select
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                  style={modalStyles.input}
+                  required
+                >
+                  <option value="">Select a client...</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.firstName} {c.lastName}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="Client name or ID"
+                  value={customClientName}
+                  onChange={(e) => setCustomClientName(e.target.value)}
+                  style={modalStyles.input}
+                  required
+                />
+              )}
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Caregiver</label>
+              <select
+                value={caregiverId}
+                onChange={(e) => setCaregiverId(e.target.value)}
+                style={modalStyles.input}
+              >
+                <option value="">Unassigned (Auto-match)</option>
+                {caregivers.map((cg) => (
+                  <option key={cg.id} value={cg.id}>
+                    {cg.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Service Type</label>
+              <select
+                value={serviceTypeName}
+                onChange={(e) => setServiceTypeName(e.target.value)}
+                style={modalStyles.input}
+              >
+                <option value="Personal Care">Personal Care</option>
+                <option value="Home Health Aide">Home Health Aide</option>
+                <option value="Skilled Nursing">Skilled Nursing</option>
+                <option value="Physical Therapy">Physical Therapy</option>
+                <option value="Companion Care">Companion Care</option>
+                <option value="Respite Care">Respite Care</option>
+              </select>
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Frequency</label>
+              <select
+                value={frequency}
+                onChange={(e) => setFrequency(e.target.value)}
+                style={modalStyles.input}
+              >
+                <option value="WEEKLY">Weekly</option>
+                <option value="DAILY">Daily</option>
+                <option value="BIWEEKLY">Bi-weekly</option>
+                <option value="MONTHLY">Monthly</option>
+              </select>
+            </div>
+          </div>
+
+          {(frequency === 'WEEKLY' || frequency === 'BIWEEKLY') && (
+            <div style={modalStyles.formGroupFull}>
+              <label style={modalStyles.label}>Days of Week *</label>
+              <div style={modalStyles.daysRow}>
+                {DAYS.map((day) => {
+                  const active = selectedDays.includes(day.value);
+                  return (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => toggleDay(day.value)}
+                      style={{
+                        ...modalStyles.dayPill,
+                        ...(active ? modalStyles.dayPillActive : {}),
+                      }}
+                    >
+                      {day.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div style={modalStyles.formGrid}>
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Start Time *</label>
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                style={modalStyles.input}
+                required
+              />
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Duration *</label>
+              <select
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+                style={modalStyles.input}
+              >
+                <option value={60}>1 hour (60 min)</option>
+                <option value={120}>2 hours (120 min)</option>
+                <option value={180}>3 hours (180 min)</option>
+                <option value={240}>4 hours (240 min)</option>
+                <option value={360}>6 hours (360 min)</option>
+                <option value={480}>8 hours (480 min)</option>
+              </select>
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Start Date *</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                style={modalStyles.input}
+                required
+              />
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                style={modalStyles.input}
+              />
+            </div>
+          </div>
+
+          <div style={modalStyles.checkboxRow}>
+            <label style={modalStyles.checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={skipHolidays}
+                onChange={(e) => setSkipHolidays(e.target.checked)}
+                style={modalStyles.checkbox}
+              />
+              <span>Skip US Federal Holidays (automated compliance)</span>
+            </label>
+          </div>
+
+          <div style={modalStyles.formGroupFull}>
+            <label style={modalStyles.label}>Care Notes / Instructions</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Assist with morning routine, medication reminders, meal preparation"
+              style={modalStyles.textarea}
+              rows={2}
+            />
+          </div>
+
+          <div style={modalStyles.footer}>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              style={modalStyles.cancelBtn}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              style={modalStyles.submitBtn}
+            >
+              {submitting ? 'Generating Schedule...' : 'Generate Recurring Visits'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface ScheduleSupervisionVisitModalProps {
+  clients: Array<{ id: string; firstName: string; lastName: string; primaryAddress?: any }>;
+  caregivers: Caregiver[];
+  initialClientId?: string;
+  onClose: () => void;
+  onSuccess: () => Promise<void> | void;
+}
+
+function ScheduleSupervisionVisitModal({
+  clients,
+  caregivers,
+  initialClientId,
+  onClose,
+  onSuccess,
+}: ScheduleSupervisionVisitModalProps) {
+  const [clientId, setClientId] = useState<string>(initialClientId || clients[0]?.id || '');
+  const [caregiverId, setCaregiverId] = useState<string>('');
+  const [visitDate, setVisitDate] = useState<string>(() => new Date().toISOString().split('T')[0]!);
+  const [startTime, setStartTime] = useState<string>('09:00');
+  const [duration, setDuration] = useState<number>(60);
+  const [notes, setNotes] = useState<string>(
+    'Mandated RN Supervisory Visit (Florida AHCA Ch. 59A-8 / Texas HHSC 26 TAC §558). Review care plan delivery and client satisfaction.'
+  );
+  const [submitting, setSubmitting] = useState<boolean>(false);
+
+  const selectedClient = clients.find((c) => c.id === clientId);
+  const stateCode = selectedClient?.primaryAddress?.state || 'FL';
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientId) {
+      toast.error('Please select a client');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      toast.success(
+        `Supervision visit scheduled for ${selectedClient ? `${selectedClient.firstName} ${selectedClient.lastName}` : 'client'} on ${visitDate}!`
+      );
+      await onSuccess();
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to schedule supervision visit');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={modalStyles.overlay}>
+      <div style={modalStyles.container}>
+        <div style={modalStyles.header}>
+          <div>
+            <h2 style={modalStyles.title}>Schedule Supervision Visit</h2>
+            <p style={modalStyles.subtitle}>
+              Mandated RN supervisory visit cadence for {stateCode} licensure compliance (60-day cycle)
+            </p>
+          </div>
+          <button style={modalStyles.closeBtn} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={modalStyles.form}>
+          <div style={modalStyles.formGrid}>
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Client *</label>
+              <select
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                style={modalStyles.input}
+                required
+              >
+                <option value="">Select a client...</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.firstName} {c.lastName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Supervising RN Caregiver</label>
+              <select
+                value={caregiverId}
+                onChange={(e) => setCaregiverId(e.target.value)}
+                style={modalStyles.input}
+              >
+                <option value="">Unassigned (Open for RN)</option>
+                {caregivers.map((cg) => (
+                  <option key={cg.id} value={cg.id}>
+                    {cg.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Service Type</label>
+              <input
+                type="text"
+                value="RN Supervisory Visit (AHCA 59A-8 / TX §558)"
+                readOnly
+                style={{ ...modalStyles.input, backgroundColor: '#f3f4f6' }}
+              />
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Visit Date *</label>
+              <input
+                type="date"
+                value={visitDate}
+                onChange={(e) => setVisitDate(e.target.value)}
+                style={modalStyles.input}
+                required
+              />
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Start Time *</label>
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                style={modalStyles.input}
+                required
+              />
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Duration (minutes)</label>
+              <select
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+                style={modalStyles.input}
+              >
+                <option value={45}>45 minutes</option>
+                <option value={60}>60 minutes (Standard)</option>
+                <option value={90}>90 minutes</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={modalStyles.formGroupFull}>
+            <label style={modalStyles.label}>Supervisory Scope & Clinical Notes</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              style={modalStyles.textarea}
+              rows={3}
+            />
+          </div>
+
+          <div style={modalStyles.footer}>
+            <button type="button" onClick={onClose} style={modalStyles.cancelBtn}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{
+                ...modalStyles.submitBtn,
+                backgroundColor: '#2563eb',
+              }}
+            >
+              {submitting ? 'Scheduling...' : 'Confirm & Schedule Supervision'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+const modalStyles: { [key: string]: React.CSSProperties } = {
+  overlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  container: {
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    width: '100%',
+    maxWidth: '680px',
+    maxHeight: '90vh',
+    overflowY: 'auto',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+  },
+  header: {
+    padding: '20px 24px',
+    borderBottom: '1px solid #e5e7eb',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  title: {
+    fontSize: '20px',
+    fontWeight: 'bold',
+    color: '#111827',
+    margin: 0,
+  },
+  subtitle: {
+    fontSize: '13px',
+    color: '#6b7280',
+    marginTop: '4px',
+    marginBottom: 0,
+  },
+  closeBtn: {
+    background: 'none',
+    border: 'none',
+    fontSize: '18px',
+    color: '#9ca3af',
+    cursor: 'pointer',
+    padding: '4px',
+  },
+  form: {
+    padding: '24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  formGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '16px',
+  },
+  formGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  formGroupFull: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    width: '100%',
+  },
+  label: {
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#374151',
+  },
+  input: {
+    padding: '8px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '14px',
+    color: '#111827',
+    backgroundColor: '#ffffff',
+    outline: 'none',
+  },
+  textarea: {
+    padding: '8px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '14px',
+    color: '#111827',
+    outline: 'none',
+    resize: 'vertical',
+  },
+  daysRow: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+  },
+  dayPill: {
+    padding: '6px 14px',
+    borderRadius: '20px',
+    border: '1px solid #d1d5db',
+    backgroundColor: '#f9fafb',
+    color: '#4b5563',
+    fontSize: '13px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  dayPillActive: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+    color: '#ffffff',
+  },
+  checkboxRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  checkboxLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '13px',
+    color: '#374151',
+    cursor: 'pointer',
+  },
+  checkbox: {
+    width: '16px',
+    height: '16px',
+    cursor: 'pointer',
+  },
+  footer: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '12px',
+    marginTop: '12px',
+    paddingTop: '16px',
+    borderTop: '1px solid #e5e7eb',
+  },
+  cancelBtn: {
+    padding: '8px 16px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    backgroundColor: '#ffffff',
+    color: '#374151',
+    fontSize: '14px',
+    cursor: 'pointer',
+  },
+  submitBtn: {
+    padding: '8px 18px',
+    border: 'none',
+    borderRadius: '6px',
+    backgroundColor: '#10b981',
+    color: '#ffffff',
+    fontSize: '14px',
+    fontWeight: '500',
+    cursor: 'pointer',
   },
 };

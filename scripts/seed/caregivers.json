@@ -1,0 +1,543 @@
+[
+  {
+    "id": "cg-tx-rn-001",
+    "organizationId": "550e8400-e29b-41d4-a716-446655440000",
+    "branchIds": ["branch-tx-001"],
+    "primaryBranchId": "branch-tx-001",
+    "employeeNumber": "EMP-TX-101",
+    "firstName": "Elena",
+    "middleName": "Marie",
+    "lastName": "Cruz",
+    "preferredName": "Elena",
+    "dateOfBirth": "1984-07-22T00:00:00.000Z",
+    "email": "elena.cruz@folkcare.example",
+    "primaryPhone": {
+      "number": "+1-512-555-0141",
+      "type": "MOBILE",
+      "canReceiveSMS": true
+    },
+    "employmentType": "FULL_TIME",
+    "employmentStatus": "ACTIVE",
+    "hireDate": "2023-03-01T00:00:00.000Z",
+    "role": "RN",
+    "status": "ACTIVE",
+    "complianceStatus": "COMPLIANT",
+    "credentials": [
+      {
+        "id": "cred-tx-rn-1",
+        "type": "RN_LICENSE",
+        "name": "Texas Registered Nurse License",
+        "number": "RN-TX-849201",
+        "issueDate": "2023-01-10T00:00:00.000Z",
+        "expirationDate": "2027-01-31T00:00:00.000Z",
+        "status": "ACTIVE"
+      },
+      {
+        "id": "cred-tx-bls-1",
+        "type": "BLS_CPR",
+        "name": "AHA Basic Life Support for Healthcare Providers",
+        "number": "AHA-BLS-9921",
+        "issueDate": "2024-02-15T00:00:00.000Z",
+        "expirationDate": "2026-02-28T00:00:00.000Z",
+        "status": "ACTIVE"
+      }
+    ],
+    "training": [
+      {
+        "id": "trn-tx-emr-1",
+        "name": "HHSC Employee Misconduct Registry (EMR) Clearance",
+        "category": "STATE_COMPLIANCE",
+        "completionDate": "2024-03-01T00:00:00.000Z",
+        "expirationDate": "2025-03-01T00:00:00.000Z",
+        "status": "COMPLETED"
+      },
+      {
+        "id": "trn-tx-evv-1",
+        "name": "Texas EVV Policy and HHAeXchange Portal Training",
+        "category": "EVV",
+        "completionDate": "2024-01-15T00:00:00.000Z",
+        "expirationDate": null,
+        "status": "COMPLETED"
+      }
+    ],
+    "stateScreenings": {
+      "state": "TX",
+      "emrCleared": true,
+      "narVerified": true,
+      "dpsBackgroundCleared": true,
+      "oigCleared": true,
+      "lastVerifiedDate": "2025-01-10T00:00:00.000Z"
+    },
+    "isDemoData": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-15T00:00:00.000Z"
+  },
+  {
+    "id": "cg-tx-lpn-002",
+    "organizationId": "550e8400-e29b-41d4-a716-446655440000",
+    "branchIds": ["branch-tx-001"],
+    "primaryBranchId": "branch-tx-001",
+    "employeeNumber": "EMP-TX-102",
+    "firstName": "Marcus",
+    "middleName": "James",
+    "lastName": "Vance",
+    "preferredName": "Marc",
+    "dateOfBirth": "1989-11-04T00:00:00.000Z",
+    "email": "marcus.vance@folkcare.example",
+    "primaryPhone": {
+      "number": "+1-512-555-0142",
+      "type": "MOBILE",
+      "canReceiveSMS": true
+    },
+    "employmentType": "FULL_TIME",
+    "employmentStatus": "ACTIVE",
+    "hireDate": "2023-06-15T00:00:00.000Z",
+    "role": "LPN",
+    "status": "ACTIVE",
+    "complianceStatus": "COMPLIANT",
+    "credentials": [
+      {
+        "id": "cred-tx-lvn-2",
+        "type": "LVN_LICENSE",
+        "name": "Texas Licensed Vocational Nurse License",
+        "number": "LVN-TX-338190",
+        "issueDate": "2023-05-01T00:00:00.000Z",
+        "expirationDate": "2027-05-31T00:00:00.000Z",
+        "status": "ACTIVE"
+      },
+      {
+        "id": "cred-tx-iv-2",
+        "type": "IV_CERTIFICATION",
+        "name": "Post-Licensure IV Therapy Certification",
+        "number": "IV-TX-5512",
+        "issueDate": "2023-06-01T00:00:00.000Z",
+        "expirationDate": null,
+        "status": "ACTIVE"
+      }
+    ],
+    "training": [
+      {
+        "id": "trn-tx-emr-2",
+        "name": "HHSC Employee Misconduct Registry (EMR) Clearance",
+        "category": "STATE_COMPLIANCE",
+        "completionDate": "2024-06-01T00:00:00.000Z",
+        "expirationDate": "2025-06-01T00:00:00.000Z",
+        "status": "COMPLETED"
+      }
+    ],
+    "stateScreenings": {
+      "state": "TX",
+      "emrCleared": true,
+      "narVerified": true,
+      "dpsBackgroundCleared": true,
+      "oigCleared": true,
+      "lastVerifiedDate": "2025-01-10T00:00:00.000Z"
+    },
+    "isDemoData": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-15T00:00:00.000Z"
+  },
+  {
+    "id": "cg-tx-cna-003",
+    "organizationId": "550e8400-e29b-41d4-a716-446655440000",
+    "branchIds": ["branch-tx-001"],
+    "primaryBranchId": "branch-tx-001",
+    "employeeNumber": "EMP-TX-103",
+    "firstName": "Jordan",
+    "middleName": "Taylor",
+    "lastName": "Reed",
+    "preferredName": "Jordan",
+    "dateOfBirth": "1994-03-18T00:00:00.000Z",
+    "email": "jordan.reed@folkcare.example",
+    "primaryPhone": {
+      "number": "+1-512-555-0143",
+      "type": "MOBILE",
+      "canReceiveSMS": true
+    },
+    "employmentType": "PART_TIME",
+    "employmentStatus": "ACTIVE",
+    "hireDate": "2024-01-10T00:00:00.000Z",
+    "role": "CNA",
+    "status": "ACTIVE",
+    "complianceStatus": "COMPLIANT",
+    "credentials": [
+      {
+        "id": "cred-tx-cna-3",
+        "type": "CNA_CERTIFICATE",
+        "name": "Texas Certified Nurse Aide (NAR Listing)",
+        "number": "NAR-TX-710482",
+        "issueDate": "2023-08-15T00:00:00.000Z",
+        "expirationDate": "2026-08-31T00:00:00.000Z",
+        "status": "ACTIVE"
+      },
+      {
+        "id": "cred-tx-cpr-3",
+        "type": "CPR_FIRST_AID",
+        "name": "Adult/Child CPR and AED",
+        "number": "CPR-TX-2201",
+        "issueDate": "2024-01-05T00:00:00.000Z",
+        "expirationDate": "2026-01-31T00:00:00.000Z",
+        "status": "ACTIVE"
+      }
+    ],
+    "training": [
+      {
+        "id": "trn-tx-nar-3",
+        "name": "HHSC Nurse Aide Registry Verification",
+        "category": "STATE_COMPLIANCE",
+        "completionDate": "2024-01-10T00:00:00.000Z",
+        "expirationDate": "2026-01-10T00:00:00.000Z",
+        "status": "COMPLETED"
+      },
+      {
+        "id": "trn-tx-emr-3",
+        "name": "HHSC Employee Misconduct Registry (EMR) Clearance",
+        "category": "STATE_COMPLIANCE",
+        "completionDate": "2024-01-10T00:00:00.000Z",
+        "expirationDate": "2025-01-10T00:00:00.000Z",
+        "status": "COMPLETED"
+      }
+    ],
+    "stateScreenings": {
+      "state": "TX",
+      "emrCleared": true,
+      "narVerified": true,
+      "dpsBackgroundCleared": true,
+      "oigCleared": true,
+      "lastVerifiedDate": "2025-01-10T00:00:00.000Z"
+    },
+    "isDemoData": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-15T00:00:00.000Z"
+  },
+  {
+    "id": "cg-tx-hha-004",
+    "organizationId": "550e8400-e29b-41d4-a716-446655440000",
+    "branchIds": ["branch-tx-001"],
+    "primaryBranchId": "branch-tx-001",
+    "employeeNumber": "EMP-TX-104",
+    "firstName": "Samantha",
+    "middleName": null,
+    "lastName": "Brooks",
+    "preferredName": "Sam",
+    "dateOfBirth": "1997-09-30T00:00:00.000Z",
+    "email": "samantha.brooks@folkcare.example",
+    "primaryPhone": {
+      "number": "+1-512-555-0144",
+      "type": "MOBILE",
+      "canReceiveSMS": true
+    },
+    "employmentType": "PER_DIEM",
+    "employmentStatus": "ACTIVE",
+    "hireDate": "2024-04-01T00:00:00.000Z",
+    "role": "HHA",
+    "status": "ACTIVE",
+    "complianceStatus": "COMPLIANT",
+    "credentials": [
+      {
+        "id": "cred-tx-hha-4",
+        "type": "HHA_CERTIFICATE",
+        "name": "75-Hour Home Health Aide Training Certificate",
+        "number": "HHA-TX-5049",
+        "issueDate": "2024-03-20T00:00:00.000Z",
+        "expirationDate": null,
+        "status": "ACTIVE"
+      }
+    ],
+    "training": [
+      {
+        "id": "trn-tx-emr-4",
+        "name": "HHSC Employee Misconduct Registry (EMR) Clearance",
+        "category": "STATE_COMPLIANCE",
+        "completionDate": "2024-04-01T00:00:00.000Z",
+        "expirationDate": "2025-04-01T00:00:00.000Z",
+        "status": "COMPLETED"
+      }
+    ],
+    "stateScreenings": {
+      "state": "TX",
+      "emrCleared": true,
+      "narVerified": false,
+      "dpsBackgroundCleared": true,
+      "oigCleared": true,
+      "lastVerifiedDate": "2025-01-10T00:00:00.000Z"
+    },
+    "isDemoData": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-15T00:00:00.000Z"
+  },
+  {
+    "id": "cg-fl-rn-005",
+    "organizationId": "550e8400-e29b-41d4-a716-446655440000",
+    "branchIds": ["branch-fl-001"],
+    "primaryBranchId": "branch-fl-001",
+    "employeeNumber": "EMP-FL-201",
+    "firstName": "Patricia",
+    "middleName": "Ann",
+    "lastName": "Miller",
+    "preferredName": "Pat",
+    "dateOfBirth": "1982-12-14T00:00:00.000Z",
+    "email": "patricia.miller@folkcare.example",
+    "primaryPhone": {
+      "number": "+1-407-555-0151",
+      "type": "MOBILE",
+      "canReceiveSMS": true
+    },
+    "employmentType": "FULL_TIME",
+    "employmentStatus": "ACTIVE",
+    "hireDate": "2022-10-01T00:00:00.000Z",
+    "role": "RN",
+    "status": "ACTIVE",
+    "complianceStatus": "COMPLIANT",
+    "credentials": [
+      {
+        "id": "cred-fl-rn-5",
+        "type": "RN_LICENSE",
+        "name": "Florida Registered Nurse License",
+        "number": "RN-FL-930211",
+        "issueDate": "2022-09-01T00:00:00.000Z",
+        "expirationDate": "2026-04-30T00:00:00.000Z",
+        "status": "ACTIVE"
+      },
+      {
+        "id": "cred-fl-bls-5",
+        "type": "BLS_CPR",
+        "name": "AHA BLS Healthcare Provider CPR",
+        "number": "AHA-FL-1049",
+        "issueDate": "2024-05-10T00:00:00.000Z",
+        "expirationDate": "2026-05-31T00:00:00.000Z",
+        "status": "ACTIVE"
+      }
+    ],
+    "training": [
+      {
+        "id": "trn-fl-lvl2-5",
+        "name": "AHCA Level 2 Background Screening Clearance (Clearinghouse)",
+        "category": "STATE_COMPLIANCE",
+        "completionDate": "2022-09-15T00:00:00.000Z",
+        "expirationDate": "2027-09-15T00:00:00.000Z",
+        "status": "COMPLETED"
+      },
+      {
+        "id": "trn-fl-rn-sup-5",
+        "name": "Florida AHCA 60-Day RN Supervisory Visit Certification",
+        "category": "SUPERVISION",
+        "completionDate": "2023-01-10T00:00:00.000Z",
+        "expirationDate": null,
+        "status": "COMPLETED"
+      }
+    ],
+    "stateScreenings": {
+      "state": "FL",
+      "level2ScreeningCleared": true,
+      "ahcaClearinghouseTCN": "TCN-FL-881920",
+      "clearinghouseExpirationDate": "2027-09-15T00:00:00.000Z",
+      "oigCleared": true,
+      "lastVerifiedDate": "2025-01-10T00:00:00.000Z"
+    },
+    "isDemoData": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-15T00:00:00.000Z"
+  },
+  {
+    "id": "cg-fl-lpn-006",
+    "organizationId": "550e8400-e29b-41d4-a716-446655440000",
+    "branchIds": ["branch-fl-001"],
+    "primaryBranchId": "branch-fl-001",
+    "employeeNumber": "EMP-FL-202",
+    "firstName": "David",
+    "middleName": "Patrick",
+    "lastName": "O'Connor",
+    "preferredName": "Dave",
+    "dateOfBirth": "1991-05-19T00:00:00.000Z",
+    "email": "david.oconnor@folkcare.example",
+    "primaryPhone": {
+      "number": "+1-407-555-0152",
+      "type": "MOBILE",
+      "canReceiveSMS": true
+    },
+    "employmentType": "FULL_TIME",
+    "employmentStatus": "ACTIVE",
+    "role": "LPN",
+    "hireDate": "2023-08-01T00:00:00.000Z",
+    "status": "ACTIVE",
+    "complianceStatus": "COMPLIANT",
+    "credentials": [
+      {
+        "id": "cred-fl-lpn-6",
+        "type": "LPN_LICENSE",
+        "name": "Florida Licensed Practical Nurse License",
+        "number": "PN-FL-551029",
+        "issueDate": "2023-07-15T00:00:00.000Z",
+        "expirationDate": "2027-07-31T00:00:00.000Z",
+        "status": "ACTIVE"
+      }
+    ],
+    "training": [
+      {
+        "id": "trn-fl-lvl2-6",
+        "name": "AHCA Level 2 Background Screening Clearance",
+        "category": "STATE_COMPLIANCE",
+        "completionDate": "2023-07-20T00:00:00.000Z",
+        "expirationDate": "2028-07-20T00:00:00.000Z",
+        "status": "COMPLETED"
+      }
+    ],
+    "stateScreenings": {
+      "state": "FL",
+      "level2ScreeningCleared": true,
+      "ahcaClearinghouseTCN": "TCN-FL-994812",
+      "clearinghouseExpirationDate": "2028-07-20T00:00:00.000Z",
+      "oigCleared": true,
+      "lastVerifiedDate": "2025-01-10T00:00:00.000Z"
+    },
+    "isDemoData": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-15T00:00:00.000Z"
+  },
+  {
+    "id": "cg-fl-cna-007",
+    "organizationId": "550e8400-e29b-41d4-a716-446655440000",
+    "branchIds": ["branch-fl-001"],
+    "primaryBranchId": "branch-fl-001",
+    "employeeNumber": "EMP-FL-203",
+    "firstName": "Ana",
+    "middleName": "Sofia",
+    "lastName": "Morales",
+    "preferredName": "Ana",
+    "dateOfBirth": "1996-01-25T00:00:00.000Z",
+    "email": "ana.morales@folkcare.example",
+    "primaryPhone": {
+      "number": "+1-407-555-0153",
+      "type": "MOBILE",
+      "canReceiveSMS": true
+    },
+    "employmentType": "PART_TIME",
+    "employmentStatus": "ACTIVE",
+    "hireDate": "2024-02-15T00:00:00.000Z",
+    "role": "CNA",
+    "status": "ACTIVE",
+    "complianceStatus": "COMPLIANT",
+    "credentials": [
+      {
+        "id": "cred-fl-cna-7",
+        "type": "CNA_CERTIFICATE",
+        "name": "Florida Certified Nursing Assistant License",
+        "number": "CNA-FL-198273",
+        "issueDate": "2023-11-01T00:00:00.000Z",
+        "expirationDate": "2025-11-30T00:00:00.000Z",
+        "status": "ACTIVE"
+      },
+      {
+        "id": "cred-fl-cpr-7",
+        "type": "CPR_FIRST_AID",
+        "name": "Basic CPR / First Aid",
+        "number": "CPR-FL-4401",
+        "issueDate": "2024-01-15T00:00:00.000Z",
+        "expirationDate": "2026-01-31T00:00:00.000Z",
+        "status": "ACTIVE"
+      }
+    ],
+    "training": [
+      {
+        "id": "trn-fl-lvl2-7",
+        "name": "AHCA Level 2 Background Screening Clearance",
+        "category": "STATE_COMPLIANCE",
+        "completionDate": "2024-02-01T00:00:00.000Z",
+        "expirationDate": "2029-02-01T00:00:00.000Z",
+        "status": "COMPLETED"
+      },
+      {
+        "id": "trn-fl-alzh-7",
+        "name": "Florida AHCA 2-Hour Alzheimer's & Dementia Training",
+        "category": "STATE_MANDATE",
+        "completionDate": "2024-02-10T00:00:00.000Z",
+        "expirationDate": null,
+        "status": "COMPLETED"
+      },
+      {
+        "id": "trn-fl-hiv-7",
+        "name": "Florida AHCA HIV/AIDS and Infection Control",
+        "category": "STATE_MANDATE",
+        "completionDate": "2024-02-10T00:00:00.000Z",
+        "expirationDate": null,
+        "status": "COMPLETED"
+      }
+    ],
+    "stateScreenings": {
+      "state": "FL",
+      "level2ScreeningCleared": true,
+      "ahcaClearinghouseTCN": "TCN-FL-772810",
+      "clearinghouseExpirationDate": "2029-02-01T00:00:00.000Z",
+      "oigCleared": true,
+      "lastVerifiedDate": "2025-01-10T00:00:00.000Z"
+    },
+    "isDemoData": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-15T00:00:00.000Z"
+  },
+  {
+    "id": "cg-fl-hha-008",
+    "organizationId": "550e8400-e29b-41d4-a716-446655440000",
+    "branchIds": ["branch-fl-001"],
+    "primaryBranchId": "branch-fl-001",
+    "employeeNumber": "EMP-FL-204",
+    "firstName": "Carlos",
+    "middleName": "Eduardo",
+    "lastName": "Mendez",
+    "preferredName": "Carlos",
+    "dateOfBirth": "1993-08-11T00:00:00.000Z",
+    "email": "carlos.mendez@folkcare.example",
+    "primaryPhone": {
+      "number": "+1-407-555-0154",
+      "type": "MOBILE",
+      "canReceiveSMS": true
+    },
+    "employmentType": "FULL_TIME",
+    "employmentStatus": "ACTIVE",
+    "hireDate": "2024-03-01T00:00:00.000Z",
+    "role": "HHA",
+    "status": "ACTIVE",
+    "complianceStatus": "COMPLIANT",
+    "credentials": [
+      {
+        "id": "cred-fl-hha-8",
+        "type": "HHA_CERTIFICATE",
+        "name": "Florida 75-Hour Home Health Aide Certificate",
+        "number": "HHA-FL-60192",
+        "issueDate": "2024-02-20T00:00:00.000Z",
+        "expirationDate": null,
+        "status": "ACTIVE"
+      }
+    ],
+    "training": [
+      {
+        "id": "trn-fl-lvl2-8",
+        "name": "AHCA Level 2 Background Screening Clearance",
+        "category": "STATE_COMPLIANCE",
+        "completionDate": "2024-02-25T00:00:00.000Z",
+        "expirationDate": "2029-02-25T00:00:00.000Z",
+        "status": "COMPLETED"
+      },
+      {
+        "id": "trn-fl-alzh-8",
+        "name": "Florida AHCA 2-Hour Alzheimer's & Dementia Training",
+        "category": "STATE_MANDATE",
+        "completionDate": "2024-03-05T00:00:00.000Z",
+        "expirationDate": null,
+        "status": "COMPLETED"
+      }
+    ],
+    "stateScreenings": {
+      "state": "FL",
+      "level2ScreeningCleared": true,
+      "ahcaClearinghouseTCN": "TCN-FL-441920",
+      "clearinghouseExpirationDate": "2029-02-25T00:00:00.000Z",
+      "oigCleared": true,
+      "lastVerifiedDate": "2025-01-10T00:00:00.000Z"
+    },
+    "isDemoData": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-15T00:00:00.000Z"
+  }
+]

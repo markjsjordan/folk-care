@@ -1,142 +1,165 @@
-#!/bin/bash
-# Test script to verify caregiver API response structure
+#!/usr/bin/env bash
+# ==============================================================================
+# FolkCare Caregiver API Integration Test
+#
+# Tests the caregiver endpoints against a running local server.
+# If no server is running, automatically starts an isolated test server on port 3099.
+# ==============================================================================
 
-# This script tests the GET /api/caregivers/:id endpoint with a sample caregiver
+set -uo pipefail
 
-# Colors for output
+# Colors
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-echo -e "${YELLOW}=== CaregiverDetail API Response Test ===${NC}\n"
+PASSED_COUNT=0
+FAILED_COUNT=0
 
-# Step 1: Get a sample caregiver ID from database
-echo -e "${YELLOW}Step 1: Finding sample caregiver from database...${NC}"
+# Determine target URL
+PORT="${PORT:-3000}"
+DEFAULT_URL="http://localhost:${PORT}"
+TEST_PORT=3099
+SPAWNED_PID=""
 
-# Note: This requires psql and DATABASE_URL to be set
-# For now, we'll use a hardcoded ID that should exist in demo data
-
-# Sample caregiver IDs from folk-care demo data (if they exist)
-SAMPLE_IDS=(
-  "demo-caregiver-1"
-  "demo-caregiver-2"
-  "caregiver-001"
-)
-
-echo "Sample caregiver IDs to try: ${SAMPLE_IDS[@]}"
-echo ""
-
-# Step 2: Test with a sample ID
-echo -e "${YELLOW}Step 2: Testing API endpoint structure...${NC}"
-echo ""
-
-echo "Expected API Response Structure:"
-cat <<'EOF'
-{
-  "id": "string",
-  "organizationId": "string",
-  "branchIds": ["string"],
-  "primaryBranchId": "string",
-  "employeeNumber": "string",
-  "firstName": "string",
-  "middleName": "string | null",
-  "lastName": "string",
-  "preferredName": "string | null",
-  "dateOfBirth": "ISO 8601 string (e.g., '1985-03-15T00:00:00.000Z')",
-  "email": "string",
-  "primaryPhone": {
-    "number": "string",
-    "type": "MOBILE | HOME | WORK",
-    "canReceiveSMS": boolean
-  },
-  "employmentType": "FULL_TIME | PART_TIME | PER_DIEM | CONTRACT | TEMPORARY | SEASONAL",
-  "employmentStatus": "ACTIVE | ON_LEAVE | SUSPENDED | TERMINATED | RETIRED",
-  "hireDate": "ISO 8601 string",
-  "role": "string",
-  "status": "APPLICATION | INTERVIEWING | PENDING_ONBOARDING | ONBOARDING | ACTIVE | INACTIVE | ON_LEAVE | SUSPENDED | TERMINATED | RETIRED",
-  "complianceStatus": "COMPLIANT | PENDING_VERIFICATION | EXPIRING_SOON | EXPIRED | NON_COMPLIANT",
-  "credentials": [
-    {
-      "id": "string",
-      "type": "string",
-      "name": "string",
-      "number": "string | null",
-      "issueDate": "ISO 8601 string",
-      "expirationDate": "ISO 8601 string | null",
-      "status": "ACTIVE | EXPIRED | PENDING_VERIFICATION | REVOKED"
-    }
-  ],
-  "training": [
-    {
-      "id": "string",
-      "name": "string",
-      "category": "string",
-      "completionDate": "ISO 8601 string",
-      "expirationDate": "ISO 8601 string | null",
-      "status": "COMPLETED | EXPIRED | IN_PROGRESS"
-    }
-  ],
-  "isDemoData": boolean,
-  "createdAt": "ISO 8601 string",
-  "updatedAt": "ISO 8601 string"
+cleanup() {
+  if [ -n "$SPAWNED_PID" ]; then
+    kill "$SPAWNED_PID" 2>/dev/null || true
+    wait "$SPAWNED_PID" 2>/dev/null || true
+  fi
 }
-EOF
+trap cleanup EXIT INT TERM
 
-echo ""
-echo -e "${YELLOW}Step 3: Key Points for Frontend Implementation:${NC}"
-cat <<'EOF'
+# Check if target server is already reachable
+SERVER_URL="${API_URL:-}"
+if [ -z "$SERVER_URL" ]; then
+  if curl -s -f "http://localhost:${PORT}/health" >/dev/null 2>&1 || curl -s -f "http://localhost:${PORT}/api/health" >/dev/null 2>&1; then
+    SERVER_URL="http://localhost:${PORT}"
+  elif curl -s -f "http://localhost:3001/health" >/dev/null 2>&1 || curl -s -f "http://localhost:3001/api/health" >/dev/null 2>&1; then
+    SERVER_URL="http://localhost:3001"
+  else
+    echo -e "${YELLOW}No running API server detected on default ports.${NC}"
+    echo -e "${BLUE}Starting isolated caregiver test server on port ${TEST_PORT}...${NC}"
+    TEST_SERVER_PORT="${TEST_PORT}" npx tsx scripts/start-caregiver-test-server.ts >/dev/null 2>&1 &
+    SPAWNED_PID=$!
+    
+    # Wait up to 10 seconds for test server to be ready
+    for i in {1..20}; do
+      if curl -s -f "http://localhost:${TEST_PORT}/health" >/dev/null 2>&1; then
+        SERVER_URL="http://localhost:${TEST_PORT}"
+        break
+      fi
+      sleep 0.5
+    done
 
-1. DATE FIELDS:
-   - dateOfBirth, hireDate, credentials[].issueDate, credentials[].expirationDate
-   - training[].completionDate, training[].expirationDate
-   - createdAt, updatedAt
-   ALL are ISO 8601 strings in JSON, NOT JavaScript Date objects
-   MUST parse with: new Date(string) or use formatDate() utility
+    if [ -z "$SERVER_URL" ]; then
+      echo -e "${RED}Failed to start isolated caregiver test server.${NC}"
+      exit 1
+    fi
+    echo -e "${GREEN}✓ Test server ready at ${SERVER_URL}${NC}\n"
+  fi
+fi
 
-2. OPTIONAL FIELDS:
-   - middleName (can be null)
-   - preferredName (can be null)
-   - primaryPhone (required in type, verify at runtime)
-   - credentials[].number (can be null)
-   - credentials[].expirationDate (can be null)
-   - training[].expirationDate (can be null)
+echo -e "${YELLOW}====================================================${NC}"
+echo -e "${YELLOW}   FolkCare Caregiver API Integration Test Suite    ${NC}"
+echo -e "${YELLOW}   Target: ${SERVER_URL}                            ${NC}"
+echo -e "${YELLOW}====================================================${NC}\n"
 
-3. NESTED OBJECT ACCESS:
-   - Must check primaryPhone exists before accessing .number, .type, .canReceiveSMS
-   - Must check credentials array exists before .map()
-   - Must check training array exists before .map()
-   - Sample safe access:
-     {caregiver?.primaryPhone?.number && formatPhone(caregiver.primaryPhone.number)}
+# Helper function for assertions
+assert_status() {
+  local test_name="$1"
+  local actual_status="$2"
+  local expected_status="$3"
+  local response_body="$4"
 
-4. ARRAY FIELDS:
-   - credentials: Credential[] - might be [] (empty) or undefined
-   - training: TrainingRecord[] - might be [] (empty) or undefined
-   - branchIds: string[] - always present but might be []
+  if [ "$actual_status" -eq "$expected_status" ]; then
+    echo -e "${GREEN}✓ [PASS]${NC} ${test_name} (HTTP ${actual_status})"
+    PASSED_COUNT=$((PASSED_COUNT + 1))
+  else
+    echo -e "${RED}✗ [FAIL]${NC} ${test_name} - Expected HTTP ${expected_status}, got ${actual_status}"
+    if [ -n "$response_body" ]; then
+      echo -e "${RED}  Response:${NC} ${response_body:0:200}"
+    fi
+    FAILED_COUNT=$((FAILED_COUNT + 1))
+  fi
+}
 
-5. STATUS ENUMS:
-   - status: APPLICATION, INTERVIEWING, PENDING_ONBOARDING, ONBOARDING, ACTIVE, INACTIVE, ON_LEAVE, SUSPENDED, TERMINATED, RETIRED
-   - complianceStatus: COMPLIANT, PENDING_VERIFICATION, EXPIRING_SOON, EXPIRED, NON_COMPLIANT
-   - employmentStatus: ACTIVE, ON_LEAVE, SUSPENDED, TERMINATED, RETIRED
-   - employmentType: FULL_TIME, PART_TIME, PER_DIEM, CONTRACT, TEMPORARY, SEASONAL
+AUTH_TOKEN="Bearer mock-test-token-valid"
 
-6. PAYRATE (Not in basic response):
-   - The API routes mention payRate in POST/PATCH
-   - Verify if payRate is included in GET response or separate endpoint
-   - May need to fetch separately if not included
+# Test 1: Health check
+echo -e "${BLUE}Test 1: Server Health Check${NC}"
+HTTP_CODE=$(curl -s -o /tmp/fc_health.json -w "%{http_code}" "${SERVER_URL}/health" || curl -s -o /tmp/fc_health.json -w "%{http_code}" "${SERVER_URL}/api/health")
+assert_status "Server health check" "$HTTP_CODE" 200 "$(cat /tmp/fc_health.json 2>/dev/null || echo '')"
 
-EOF
+# Test 2: Unauthorized request returns 401
+echo -e "\n${BLUE}Test 2: Authorization Enforcement${NC}"
+HTTP_CODE=$(curl -s -o /tmp/fc_auth.json -w "%{http_code}" "${SERVER_URL}/api/caregivers")
+assert_status "GET /api/caregivers without token returns 401" "$HTTP_CODE" 401 "$(cat /tmp/fc_auth.json 2>/dev/null || echo '')"
 
-echo ""
-echo -e "${GREEN}=== Test Plan Complete ===${NC}"
-echo ""
-echo "Next steps:"
-echo "1. Run: npm run dev"
-echo "2. Login to the app (admin@folkcare.example)"
-echo "3. Navigate to /caregivers"
-echo "4. Click on a caregiver to test the API"
-echo "5. Open browser DevTools > Network tab"
-echo "6. Click and observe the GET /api/caregivers/:id response"
-echo "7. Compare actual response with expected structure above"
-echo ""
+# Test 3: Authorized request returns 200
+echo -e "\n${BLUE}Test 3: List Caregivers${NC}"
+HTTP_CODE=$(curl -s -o /tmp/fc_caregivers.json -w "%{http_code}" \
+  -H "Authorization: ${AUTH_TOKEN}" \
+  -H "X-Organization-Id: 550e8400-e29b-41d4-a716-446655440000" \
+  "${SERVER_URL}/api/caregivers")
+assert_status "GET /api/caregivers with Bearer token returns 200" "$HTTP_CODE" 200 "$(cat /tmp/fc_caregivers.json 2>/dev/null || echo '')"
 
+# Test 4: Filter caregivers by status=ACTIVE
+echo -e "\n${BLUE}Test 4: Filter Caregivers by Status${NC}"
+HTTP_CODE=$(curl -s -o /tmp/fc_active.json -w "%{http_code}" \
+  -H "Authorization: ${AUTH_TOKEN}" \
+  "${SERVER_URL}/api/caregivers?status=ACTIVE")
+assert_status "GET /api/caregivers?status=ACTIVE returns 200" "$HTTP_CODE" 200 "$(cat /tmp/fc_active.json 2>/dev/null || echo '')"
+
+# Test 5: Get specific caregiver profile by ID and validate structure
+echo -e "\n${BLUE}Test 5: Fetch Caregiver Profile Structure${NC}"
+CAREGIVER_ID="cg-tx-rn-001"
+# If testing against live app with different demo IDs, try first ID from list if available
+if [ -f /tmp/fc_caregivers.json ]; then
+  EXTRACTED_ID=$(grep -o '"id":"[^"]*"' /tmp/fc_caregivers.json | head -n 1 | cut -d'"' -f4 || echo "")
+  if [ -n "$EXTRACTED_ID" ]; then
+    CAREGIVER_ID="$EXTRACTED_ID"
+  fi
+fi
+
+HTTP_CODE=$(curl -s -o /tmp/fc_detail.json -w "%{http_code}" \
+  -H "Authorization: ${AUTH_TOKEN}" \
+  "${SERVER_URL}/api/caregivers/${CAREGIVER_ID}")
+assert_status "GET /api/caregivers/${CAREGIVER_ID} returns 200" "$HTTP_CODE" 200 "$(cat /tmp/fc_detail.json 2>/dev/null || echo '')"
+
+# Verify expected JSON fields
+DETAIL_BODY=$(cat /tmp/fc_detail.json 2>/dev/null || echo '')
+if [[ "$DETAIL_BODY" == *"firstName"* && "$DETAIL_BODY" == *"lastName"* && "$DETAIL_BODY" == *"status"* ]]; then
+  echo -e "${GREEN}✓ [PASS]${NC} Response contains essential fields (firstName, lastName, status)"
+  PASSED_COUNT=$((PASSED_COUNT + 1))
+else
+  echo -e "${RED}✗ [FAIL]${NC} Response missing expected fields"
+  FAILED_COUNT=$((FAILED_COUNT + 1))
+fi
+
+# Test 6: Non-existent caregiver returns 404
+echo -e "\n${BLUE}Test 6: Non-existent Caregiver ID${NC}"
+HTTP_CODE=$(curl -s -o /tmp/fc_notfound.json -w "%{http_code}" \
+  -H "Authorization: ${AUTH_TOKEN}" \
+  "${SERVER_URL}/api/caregivers/non-existent-id-000")
+assert_status "GET /api/caregivers/non-existent-id-000 returns 404" "$HTTP_CODE" 404 "$(cat /tmp/fc_notfound.json 2>/dev/null || echo '')"
+
+# Print test summary
+echo -e "\n${YELLOW}====================================================${NC}"
+echo -e "${YELLOW}                  Test Results                      ${NC}"
+echo -e "${YELLOW}====================================================${NC}"
+echo -e "Passed: ${GREEN}${PASSED_COUNT}${NC}"
+echo -e "Failed: ${RED}${FAILED_COUNT}${NC}"
+
+# Clean temporary files
+rm -f /tmp/fc_health.json /tmp/fc_auth.json /tmp/fc_caregivers.json /tmp/fc_active.json /tmp/fc_detail.json /tmp/fc_notfound.json
+
+if [ "$FAILED_COUNT" -gt 0 ]; then
+  echo -e "\n${RED}Caregiver API tests failed!${NC}"
+  exit 1
+else
+  echo -e "\n${GREEN}All Caregiver API tests passed successfully!${NC}"
+  exit 0
+fi

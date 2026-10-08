@@ -42,6 +42,10 @@ import type {
   CreateShiftListingInput,
   UpdateShiftListingInput,
   ShiftSearchFilters,
+  Visit,
+  CreateVisitInput,
+  UpdateVisitInput,
+  VisitSearchFilters,
 } from '../types/showcase-types.js';
 
 const STORAGE_KEY = 'folkcare-showcase-data';
@@ -56,7 +60,9 @@ interface MockDataStore {
   payrollPeriods: PayrollPeriod[];
   shiftListings: ShiftListing[];
   shiftApplications: ShiftApplication[];
+  visits: Visit[];
 }
+
 
 /**
  * Simulates network delay
@@ -120,8 +126,13 @@ export const createMockProvider = (seedData: MockDataStore): DataProvider => {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        store = { ...seedData, ...parsed };
+        store = {
+          ...seedData,
+          ...parsed,
+          visits: parsed.visits && parsed.visits.length > 0 ? parsed.visits : (seedData.visits || []),
+        };
       }
+
     } catch (error) {
       console.warn('Failed to load from localStorage:', error);
     }
@@ -606,5 +617,92 @@ export const createMockProvider = (seedData: MockDataStore): DataProvider => {
       saveToStorage();
       return newApplication;
     },
+
+    // Visit operations
+    async getVisits(filters?: VisitSearchFilters & SearchParams): Promise<PaginatedResult<Visit>> {
+      await delay(SIMULATE_DELAY);
+      let results = [...(store.visits || [])];
+
+      if (filters?.query) {
+        const q = filters.query.toLowerCase().trim();
+        results = results.filter(v =>
+          v.clientName.toLowerCase().includes(q) ||
+          (v.caregiverName && v.caregiverName.toLowerCase().includes(q)) ||
+          v.visitNumber.toLowerCase().includes(q) ||
+          v.id.toLowerCase().includes(q) ||
+          v.address.street1.toLowerCase().includes(q) ||
+          v.address.city.toLowerCase().includes(q) ||
+          v.services.some(s => s.toLowerCase().includes(q))
+        );
+      }
+
+      if (filters?.status && filters.status.length > 0) {
+        results = results.filter(v => filters.status!.includes(v.status));
+      }
+
+      if (filters?.visitType && filters.visitType.length > 0) {
+        results = results.filter(v => filters.visitType!.includes(v.visitType));
+      }
+
+      if (filters?.clientId) {
+        results = results.filter(v => v.clientId === filters.clientId);
+      }
+
+      if (filters?.caregiverId) {
+        results = results.filter(v => v.caregiverId === filters.caregiverId);
+      }
+
+      if (filters?.dateFrom) {
+        results = results.filter(v => v.scheduledDate >= filters.dateFrom!);
+      }
+
+      if (filters?.dateTo) {
+        results = results.filter(v => v.scheduledDate <= filters.dateTo!);
+      }
+
+      return paginate(results, filters?.page, filters?.pageSize);
+    },
+
+    async getVisitById(id: string): Promise<Visit> {
+      await delay(SIMULATE_DELAY);
+      const visit = store.visits?.find(v => v.id === id || v.visitNumber === id);
+      if (!visit) throw new Error(`Visit ${id} not found`);
+      return visit;
+    },
+
+    async createVisit(input: CreateVisitInput): Promise<Visit> {
+      await delay(SIMULATE_DELAY);
+      const newVisit: Visit = {
+        id: generateId(),
+        ...input,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as Visit;
+      store.visits = store.visits || [];
+      store.visits.unshift(newVisit);
+      saveToStorage();
+      return newVisit;
+    },
+
+    async updateVisit(id: string, input: UpdateVisitInput): Promise<Visit> {
+      await delay(SIMULATE_DELAY);
+      const index = (store.visits || []).findIndex(v => v.id === id);
+      if (index === -1) throw new Error(`Visit ${id} not found`);
+
+      store.visits[index] = {
+        ...store.visits[index],
+        ...input,
+        updatedAt: new Date().toISOString(),
+      };
+      saveToStorage();
+      return store.visits[index];
+    },
+
+    async deleteVisit(id: string): Promise<void> {
+      await delay(SIMULATE_DELAY);
+      store.visits = (store.visits || []).filter(v => v.id !== id);
+      saveToStorage();
+    },
   };
 };
+

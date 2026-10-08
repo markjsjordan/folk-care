@@ -150,3 +150,47 @@ export interface AIServiceConfig {
   enableCaching: boolean;
   cacheTTLSeconds: number;
 }
+
+/**
+ * Previous note summary record for context
+ */
+export interface NoteContextRecord {
+  id?: string;
+  noteText?: string;
+  noteType?: string;
+  activitiesPerformed?: string[];
+  clientMood?: string;
+  clientConditionNotes?: string;
+  createdAt?: string;
+  serviceTypeName?: string;
+}
+
+/**
+ * Input for note autofill suggestion generator
+ */
+export interface NoteAutofillInput {
+  visitId: string;
+  clientId?: string;
+  caregiverId?: string;
+  serviceTypeName?: string;
+  clientName?: string;
+  caregiverName?: string;
+  scheduledDate?: string;
+  previousNotes?: NoteContextRecord[];
+}
+
+/**
+ * Result of note autofill suggestion generator
+ */
+export interface NoteAutofillSuggestions {
+  suggestedActivities: string[];
+  suggestedMood?: string;
+  commonPhrases: string[];
+  noteStarter?: string;
+  analyzedNotesCount: number;
+  dateRange: {
+    from: string;
+    to: string;
+  };
+  generatedAt: string;
+}

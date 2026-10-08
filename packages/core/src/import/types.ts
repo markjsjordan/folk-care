@@ -179,3 +179,46 @@ export interface ParseResult<T> {
    */
   totalRows: number;
 }
+
+export interface DuplicateMatch {
+  row: number;
+  naturalKey: string;
+  existingId: string;
+  existingLabel: string;
+  matchReason: string;
+  action: 'UPDATE' | 'SKIP';
+}
+
+export interface ImportPreviewRow<T = Record<string, unknown>> {
+  rowNumber: number;
+  data: T;
+  status: 'VALID' | 'WARNING' | 'ERROR' | 'DUPLICATE';
+  errors: ImportError[];
+  duplicate?: DuplicateMatch;
+  isDuplicate: boolean;
+}
+
+export interface ImportPreviewResult<T = unknown> {
+  phase: 'preview';
+  totalRows: number;
+  validCount: number;
+  errorCount: number;
+  warningCount: number;
+  duplicateCount: number;
+  headers: string[];
+  mappings: Record<string, string>;
+  rows: ImportPreviewRow<T>[];
+  canCommit: boolean;
+}
+
+export interface CommitImportResult {
+  success: boolean;
+  phase: 'committed';
+  imported: number;
+  updated: number;
+  skipped: number;
+  total: number;
+  errors: ImportError[];
+  importedIds?: string[];
+}
+

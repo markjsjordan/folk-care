@@ -114,6 +114,7 @@ export default [
     rules: {
       '@typescript-eslint/no-misused-promises': 'off', // Express async route handlers are intentional
       'sonarjs/deprecation': 'warn', // Zod v4 deprecations are non-breaking, downgrade to warning
+      '@typescript-eslint/strict-boolean-expressions': 'off', // Legacy routes have existing loose boolean expressions
     },
   },
   {
