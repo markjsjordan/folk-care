@@ -45,6 +45,50 @@ export interface VisitApiService {
   assignCaregiver(visitId: string, caregiverId: string, checkConflicts?: boolean): Promise<Visit>;
   checkConflicts(visitId: string, caregiverId: string): Promise<ConflictCheckResult>;
   getCaregiverAvailability(date: Date, branchIds?: string[]): Promise<CaregiverAvailability[]>;
+  getVisitById(visitId: string): Promise<Visit>;
+  createPattern(data: CreatePatternPayload): Promise<{ pattern: any; visits: Visit[]; generatedVisitsCount: number; exceptions: any[] }>;
+  getPattern(id: string): Promise<PatternDetailsResponse>;
+  updatePattern(id: string, data: UpdatePatternPayload): Promise<any>;
+  listPatterns(clientId?: string): Promise<any[]>;
+}
+
+export interface CreatePatternPayload {
+  clientId: string;
+  caregiverId?: string;
+  serviceTypeId: string;
+  serviceTypeName?: string;
+  frequency?: string;
+  rrule?: string;
+  startDate: string;
+  endDate?: string;
+  dayOfWeek?: string[];
+  startTime: string;
+  duration: number;
+  status?: string;
+  notes?: string;
+  skipHolidays?: boolean;
+  horizonDays?: number;
+}
+
+export interface UpdatePatternPayload {
+  updateMode: 'THIS_VISIT' | 'ALL_FUTURE';
+  targetVisitId?: string;
+  fromDate?: string;
+  updates?: {
+    caregiverId?: string | null;
+    startTime?: string;
+    duration?: number;
+    notes?: string;
+    status?: string;
+    dayOfWeek?: string[];
+    scheduledDate?: string;
+  };
+}
+
+export interface PatternDetailsResponse {
+  pattern: any;
+  visits: Visit[];
+  totalVisits: number;
 }
 
 export const createVisitApiService = (apiClient: ApiClient): VisitApiService => {
@@ -119,6 +163,44 @@ export const createVisitApiService = (apiClient: ApiClient): VisitApiService => 
         `/api/visits/caregivers/availability?${params.toString()}`
       );
 
+      return response.data;
+    },
+
+    async getVisitById(visitId: string): Promise<Visit> {
+      const response = await apiClient.get<{ success: boolean; data: Visit }>(
+        `/api/visits/${visitId}`
+      );
+      return response.data;
+    },
+
+    async createPattern(data: CreatePatternPayload): Promise<{ pattern: any; visits: Visit[]; generatedVisitsCount: number; exceptions: any[] }> {
+      const response = await apiClient.post<{ success: boolean; data: any }>(
+        '/api/visits/patterns',
+        data
+      );
+      return response.data;
+    },
+
+    async getPattern(id: string): Promise<PatternDetailsResponse> {
+      const response = await apiClient.get<{ success: boolean; data: PatternDetailsResponse }>(
+        `/api/visits/patterns/${id}`
+      );
+      return response.data;
+    },
+
+    async updatePattern(id: string, data: UpdatePatternPayload): Promise<any> {
+      const response = await apiClient.put<{ success: boolean; data: any }>(
+        `/api/visits/patterns/${id}`,
+        data
+      );
+      return response.data;
+    },
+
+    async listPatterns(clientId?: string): Promise<any[]> {
+      const params = new URLSearchParams();
+      if (clientId) params.append('client_id', clientId);
+      const url = `/api/visits/patterns${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await apiClient.get<{ success: boolean; data: any[] }>(url);
       return response.data;
     },
   };

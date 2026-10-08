@@ -6,5 +6,6 @@ export default defineProject({
     globals: true,
     environment: 'node',
     include: ['src/**/__tests__/**/*.test.ts', 'src/**/?(*.)+(spec|test).ts'],
+    fileParallelism: false,
   },
 });

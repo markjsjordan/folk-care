@@ -21,7 +21,7 @@ export const VisitList: React.FC = () => {
 
   const { data: visits, isLoading, error, refetch } = useVisits(filters);
 
-  const visitList = useMemo(() => visits ?? [], [visits]);
+  const visitList = visits ?? [];
   const totalVisits = visitList.length;
   const isLargeDataset = totalVisits >= 500;
   const totalPages = Math.max(1, Math.ceil(totalVisits / pageSize));

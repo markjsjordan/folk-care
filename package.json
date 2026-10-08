@@ -52,6 +52,7 @@
     "test:e2e:mobile": "playwright test --project=mobile-chrome --project=mobile-safari",
     "test:visual": "playwright test --config=playwright.visual.config.ts",
     "test:visual:update": "playwright test --config=playwright.visual.config.ts --update-snapshots",
+    "test:api:caregivers": "./scripts/folk-care-caregiver-api-test.sh",
     "lint": "turbo run lint",
     "typecheck": "turbo run build && tsc -b",
     "perf:check": "npm run build:web && tsx scripts/check-performance-budgets.ts",

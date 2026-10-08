@@ -694,9 +694,9 @@ export const shiftApplications: ShiftApplication[] = [
   },
 ];
 
-// ═══════════════════════════════════════════════════════════════════════
-// EXPORT COMBINED SEED DATA
-// ═══════════════════════════════════════════════════════════════════════
+// Import visits
+import { visits } from './visits.js';
+export { visits };
 
 export const enhancedSeedData = {
   clients,
@@ -707,6 +707,8 @@ export const enhancedSeedData = {
   payrollPeriods,
   shiftListings,
   shiftApplications,
+  visits,
 };
 
 export default enhancedSeedData;
+

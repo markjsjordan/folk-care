@@ -88,7 +88,9 @@ async function findRouteFiles(): Promise<string[]> {
         '**/ai-services/**/*routes*.ts',
         '**/caregiver-burnout-prediction/**/*routes*.ts',
         // Webhook routes use signature verification instead of standard auth middleware
-        '**/integrations/src/routes/webhook-routes.ts'
+        '**/integrations/src/routes/webhook-routes.ts',
+        // Family engagement unmounted sub-routers (mounted via app handlers)
+        '**/family-engagement/**/*routes*.ts'
       ]
     });
     files.push(...matches);

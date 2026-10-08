@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   AlertTriangle,
   Shield,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { cn } from '@/core/utils';
 import { useAuth, usePermissions } from '@/core/hooks';
@@ -112,6 +113,12 @@ const navItems: NavItem[] = [
     icon: <Settings className="h-5 w-5" />,
     permission: 'admin:access',
   },
+  {
+    label: 'Import / Export',
+    path: '/admin/data',
+    icon: <FileSpreadsheet className="h-5 w-5" />,
+    permission: 'admin:access',
+  },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
@@ -127,7 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     // granular admin:access permission, since SUPER_ADMIN/ORG_ADMIN users
     // are commonly granted broad resource wildcards (e.g. "clients:*")
     // rather than an explicit "admin:access" entry.
-    if (item.path === '/admin') {
+    if (item.path === '/admin' || item.path === '/admin/data') {
       const adminRoles = ['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_ADMIN', 'ADMIN'];
       if (user?.roles.some((role) => adminRoles.includes(role))) {
         return true;

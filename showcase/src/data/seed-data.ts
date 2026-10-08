@@ -752,6 +752,10 @@ export const shiftApplications: ShiftApplication[] = [
   },
 ];
 
+// Import visits seed data
+import { visits } from './visits.js';
+export { visits };
+
 // Export combined seed data
 export const seedData = {
   clients,
@@ -762,4 +766,6 @@ export const seedData = {
   payrollPeriods,
   shiftListings,
   shiftApplications,
+  visits,
 };
+

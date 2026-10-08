@@ -1,6 +1,12 @@
 import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
+  const hasWebhooks = await knex.schema.hasTable('webhooks');
+  if (!hasWebhooks) {
+    await knex.raw('DROP TYPE IF EXISTS webhook_delivery_status CASCADE');
+    await knex.raw('DROP TYPE IF EXISTS webhook_status CASCADE');
+  }
+
   // Create webhooks table for webhook configurations
   await knex.schema.createTable('webhooks', (table) => {
     // Primary key

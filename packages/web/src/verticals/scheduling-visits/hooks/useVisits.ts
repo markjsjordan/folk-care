@@ -110,3 +110,46 @@ export const useCaregiverAvailability = (date: Date, branchIds?: string[]) => {
     refetchOnReconnect: true, // Refetch when network reconnects
   });
 };
+
+
+
+/**
+ * Hook to fetch patterns for an organization/client
+ */
+export const usePatterns = (clientId?: string) => {
+  const visitApi = useVisitApi();
+
+  return useQuery({
+    queryKey: ['visits', 'patterns', clientId],
+    queryFn: () => visitApi.listPatterns(clientId),
+    staleTime: 60 * 1000,
+  });
+};
+
+/**
+ * Hook to fetch a pattern and its generated visits
+ */
+export const usePattern = (patternId: string | undefined) => {
+  const visitApi = useVisitApi();
+
+  return useQuery({
+    queryKey: ['visits', 'patterns', patternId],
+    queryFn: () => (patternId ? visitApi.getPattern(patternId) : null),
+    enabled: Boolean(patternId),
+    staleTime: 60 * 1000,
+  });
+};
+
+/**
+ * Hook to fetch a single visit by ID
+ */
+export const useVisit = (visitId: string | undefined) => {
+  const visitApi = useVisitApi();
+
+  return useQuery({
+    queryKey: ['visits', 'detail', visitId],
+    queryFn: () => (visitId ? visitApi.getVisitById(visitId) : null),
+    enabled: Boolean(visitId),
+    staleTime: 60 * 1000,
+  });
+};

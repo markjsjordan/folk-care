@@ -6,7 +6,7 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { Database, isValidUUID, ComplianceAutopilotService, AuditService, UserContext, AuthMiddleware } from '@folkcare/core';
-import { ScheduleRepository, StaffingDemandPredictionService, CaregiverMatchingService } from '@folkcare/scheduling-visits';
+import { ScheduleRepository, StaffingDemandPredictionService, CaregiverMatchingService, RecurringVisitPatternEngine, VisitPatternRepository } from '@folkcare/scheduling-visits';
 import { ComplianceCheckingService, complianceCheckRequestSchema, DocumentationQualityService, HospitalizationRiskService, VitalsAnomalyService, SentimentAnalysisService, ReportGenerationService } from '@folkcare/visit-notes';
 import { VisitDurationPredictionService } from '@folkcare/scheduling-visits';
 import knex from 'knex';
@@ -21,13 +21,13 @@ import knex from 'knex';
  * root cause of a confirmed live exploit.
  */
 function getUserContext(req: Request): UserContext {
-  const user = req.user!;
+  const user = req.user ?? (req as unknown as { userContext?: UserContext }).userContext;
   return {
-    userId: user.userId,
-    organizationId: user.organizationId,
-    branchIds: user.branchIds,
-    roles: user.roles,
-    permissions: user.permissions,
+    userId: user?.userId ?? '',
+    organizationId: user?.organizationId ?? '',
+    branchIds: user?.branchIds ?? [],
+    roles: user?.roles ?? [],
+    permissions: user?.permissions ?? [],
   };
 }
 
@@ -247,7 +247,7 @@ export function createVisitRouter(db: Database): Router {
       const { startDate, endDate } = dateRange;
 
       // Validate organization_id is present and valid
-      if (context.organizationId === undefined) {
+      if (context.organizationId === undefined || context.organizationId === '') {
         res.status(400).json({
           success: false,
           error: 'Organization ID is required for this endpoint',
@@ -313,6 +313,242 @@ export function createVisitRouter(db: Database): Router {
           branchesFilter: branchIds.length > 0 ? branchIds : 'all',
         },
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // =========================================================================
+  // Recurring Visit Patterns Endpoints
+  // =========================================================================
+
+  /**
+   * POST /api/visits/patterns
+   * Create a recurring pattern and generate concrete visits up to rolling horizon
+   */
+  router.post('/patterns', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const context = getUserContext(req);
+      if (!context.organizationId) {
+        res.status(400).json({ success: false, error: 'Organization ID is required' });
+        return;
+      }
+
+      const {
+        clientId,
+        caregiverId,
+        serviceTypeId,
+        serviceTypeName,
+        frequency = 'WEEKLY',
+        rrule,
+        startDate,
+        endDate,
+        dayOfWeek = [],
+        startTime,
+        duration,
+        status = 'ACTIVE',
+        notes,
+        clientInstructions,
+        caregiverInstructions,
+        skipHolidays = true,
+        horizonDays = 60,
+        caregiverTimeOffExceptions,
+        clientHospitalHolds,
+      } = req.body;
+
+      if (!clientId || !serviceTypeId || !startDate || !startTime || !duration) {
+        res.status(400).json({
+          success: false,
+          error: 'Missing required fields: clientId, serviceTypeId, startDate, startTime, duration are required',
+        });
+        return;
+      }
+
+      const patternEngine = new RecurringVisitPatternEngine(db.getPool());
+      const result = await patternEngine.createPatternAndGenerateVisits(
+        {
+          organizationId: context.organizationId,
+          branchId: context.branchIds?.[0],
+          clientId,
+          caregiverId: caregiverId || undefined,
+          serviceTypeId,
+          serviceTypeName,
+          frequency,
+          rrule,
+          startDate,
+          endDate,
+          dayOfWeek,
+          startTime,
+          duration: Number(duration),
+          status,
+          notes,
+          clientInstructions,
+          caregiverInstructions,
+          skipHolidays,
+          horizonDays: Number(horizonDays),
+          caregiverTimeOffExceptions,
+          clientHospitalHolds,
+        },
+        context
+      );
+
+      res.status(201).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/visits/patterns
+   * List recurring visit patterns for the organization
+   */
+  router.get('/patterns', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const context = getUserContext(req);
+      if (!context.organizationId) {
+        res.status(400).json({ success: false, error: 'Organization ID is required' });
+        return;
+      }
+
+      const patternRepo = new VisitPatternRepository(db.getPool());
+      const patterns = await patternRepo.listPatterns({
+        organizationId: context.organizationId,
+        clientId: req.query.client_id as string | undefined,
+        caregiverId: req.query.caregiver_id as string | undefined,
+        status: req.query.status as string | undefined,
+      });
+
+      res.json({
+        success: true,
+        data: patterns,
+        count: patterns.length,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/visits/patterns/:id
+   * Get pattern details and generated visits
+   */
+  router.get('/patterns/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const context = getUserContext(req);
+      const patternId = req.params.id as string | undefined;
+
+      if (!context.organizationId) {
+        res.status(400).json({ success: false, error: 'Organization ID is required' });
+        return;
+      }
+
+      if (!patternId) {
+        res.status(400).json({ success: false, error: 'Pattern ID is required' });
+        return;
+      }
+
+      const patternEngine = new RecurringVisitPatternEngine(db.getPool());
+      const result = await patternEngine.getPatternWithVisits(patternId, context.organizationId);
+
+      res.json({
+        success: true,
+        data: {
+          pattern: result.pattern,
+          visits: result.visits,
+          totalVisits: result.visits.length,
+        },
+      });
+    } catch (error: unknown) {
+      const err = error as { name?: string; status?: number; statusCode?: number; message?: string };
+      if (err.name === 'NotFoundError' || err.status === 404 || err.statusCode === 404) {
+        res.status(404).json({ success: false, error: err.message ?? 'Not found' });
+        return;
+      }
+      next(error);
+    }
+  });
+
+  /**
+   * PUT /api/visits/patterns/:id
+   * Update future instances with options (Update this visit only / Update all future visits)
+   */
+  router.put('/patterns/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const context = getUserContext(req);
+      const patternId = req.params.id as string | undefined;
+
+      if (!context.organizationId) {
+        res.status(400).json({ success: false, error: 'Organization ID is required' });
+        return;
+      }
+
+      if (!patternId) {
+        res.status(400).json({ success: false, error: 'Pattern ID is required' });
+        return;
+      }
+
+      const {
+        updateMode = 'ALL_FUTURE',
+        targetVisitId,
+        fromDate,
+        updates,
+      } = req.body;
+
+      if (updateMode === 'THIS_VISIT' && !targetVisitId) {
+        res.status(400).json({
+          success: false,
+          error: 'targetVisitId is required when updateMode is THIS_VISIT',
+        });
+        return;
+      }
+
+      const patternEngine = new RecurringVisitPatternEngine(db.getPool());
+      const result = await patternEngine.updatePatternInstances(
+        patternId,
+        {
+          updateMode,
+          targetVisitId,
+          fromDate,
+          updates,
+        },
+        context
+      );
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error: unknown) {
+      const err = error as { name?: string; status?: number; statusCode?: number; message?: string };
+      if (err.name === 'NotFoundError' || err.status === 404 || err.statusCode === 404) {
+        res.status(404).json({ success: false, error: err.message ?? 'Not found' });
+        return;
+      }
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/visits/:id
+   * Get single visit by ID
+   */
+  router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      if (!isValidUUID(id)) {
+        res.status(400).json({ success: false, error: 'Invalid visit ID format' });
+        return;
+      }
+      const repository = new ScheduleRepository(db.getPool());
+      const visit = await repository.getVisitById(id);
+      if (!visit) {
+        res.status(404).json({ success: false, error: 'Visit not found' });
+        return;
+      }
+      res.json({ success: true, data: visit });
     } catch (error) {
       next(error);
     }
@@ -927,7 +1163,7 @@ export function createVisitRouter(db: Database): Router {
       // Parse branch IDs if provided
       const branchIds = branchIdsStr != null && branchIdsStr !== ''
         ? branchIdsStr.split(',').filter(id => id.trim() !== '')
-        : context.branchIds;
+        : (context.branchIds ?? []);
 
       // Get caregivers and their visits for the date
       const result = await db.query(

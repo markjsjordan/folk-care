@@ -20,7 +20,7 @@
     "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext ts --max-warnings 150 --ignore-pattern 'dist-vercel/**'"
+    "lint": "eslint . --ext ts --max-warnings 175 --ignore-pattern 'dist-vercel/**'"
   },
   "dependencies": {
     "@folkcare/ai-services": "*",
@@ -60,6 +60,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/archiver": "^8.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",

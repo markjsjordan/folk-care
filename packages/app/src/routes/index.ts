@@ -60,6 +60,8 @@ import { createShiftMatchingRouter } from './shift-matching.js';
 import { createComplianceRouter } from './compliance.js';
 import exportRouter from './export.js';
 import { createAIUsageRouter } from './ai-usage.js';
+import { createServiceTypesRouter } from './service-types.js';
+import { createVisitNotesRouter } from './visit-notes.js';
 
 /**
  * Helper to create router from care plan handlers object
@@ -456,6 +458,16 @@ export async function setupRoutes(app: Express, db: Database): Promise<void> {
   const aiUsageRouter = createAIUsageRouter(db);
   app.use('/api', generalApiLimiter, aiUsageRouter);
   console.log('  ✓ AI Usage tracking routes registered (with rate limiting)');
+
+  // Service Types routes (standard home care taxonomy & state billing codes)
+  const serviceTypesRouter = createServiceTypesRouter(db);
+  app.use('/api/service-types', generalApiLimiter, serviceTypesRouter);
+  console.log('  ✓ Service Types routes registered (with rate limiting)');
+
+  // Visit Notes routes (AI autofill suggestions)
+  const visitNotesRouter = createVisitNotesRouter(db);
+  app.use('/api/visit-notes', generalApiLimiter, visitNotesRouter);
+  console.log('  ✓ Visit Notes routes registered (with rate limiting)');
 
   console.log('API routes setup complete\n');
 }
