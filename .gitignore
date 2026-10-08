@@ -249,3 +249,4 @@ ui-screenshots-production-comprehensive/
 !.secrets/**/*.example
 session-ses_*.md
 .discord-secrets
+.env*

@@ -4,8 +4,8 @@
  * List all audits with filtering and search capabilities
  */
 
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, Filter } from 'lucide-react';
 import { Button, LoadingSpinner, Card } from '@/core/components';
 import { useAudits } from '../hooks';
@@ -13,7 +13,31 @@ import { AuditCard } from '../components';
 import type { AuditStatus } from '../types';
 
 export const AuditsPage: React.FC = () => {
-  const [statusFilter, setStatusFilter] = useState<AuditStatus | ''>('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState<AuditStatus | ''>(
+    (searchParams.get('status') as AuditStatus | null) || ''
+  );
+
+  // Re-sync statusFilter whenever the URL's status param changes (e.g.
+  // navigating between different "View All" links via client-side routing
+  // without a full page reload).
+  useEffect(() => {
+    setStatusFilter((searchParams.get('status') as AuditStatus | null) || '');
+  }, [searchParams]);
+
+  const handleStatusFilterChange = (value: AuditStatus | '') => {
+    setStatusFilter(value);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) {
+        next.set('status', value);
+      } else {
+        next.delete('status');
+      }
+      return next;
+    });
+  };
+
   const { data: auditsResult, isLoading, error } = useAudits({
     status: statusFilter || undefined,
     pageSize: 50,
@@ -48,7 +72,7 @@ export const AuditsPage: React.FC = () => {
             Manage and track quality assurance audits
           </p>
         </div>
-        <Link to="/audits/new">
+        <Link to="/quality-assurance/audits/new">
           <Button>
             <Plus className="h-4 w-4 mr-2" />
             New Audit
@@ -66,7 +90,7 @@ export const AuditsPage: React.FC = () => {
             </div>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as AuditStatus | '')}
+              onChange={(e) => handleStatusFilterChange(e.target.value as AuditStatus | '')}
               className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
             >
               <option value="">All Statuses</option>
@@ -97,7 +121,7 @@ export const AuditsPage: React.FC = () => {
             <p className="text-sm text-gray-500 mt-1">
               Create your first audit to get started
             </p>
-            <Link to="/audits/new">
+            <Link to="/quality-assurance/audits/new">
               <Button className="mt-4">
                 <Plus className="h-4 w-4 mr-2" />
                 New Audit

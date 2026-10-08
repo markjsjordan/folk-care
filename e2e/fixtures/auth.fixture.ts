@@ -182,34 +182,39 @@ export const test = base.extend<AuthFixtures>({
    * Defaults to coordinator role, but can be overridden
    */
   authenticatedPage: async ({ page, coordinatorUser }, use) => {
-    // Option 1: Set authentication via local storage (for JWT-based auth)
+    // The app's real auth state lives in a Zustand store persisted to
+    // localStorage under the 'auth-storage' key (see
+    // packages/web/src/core/hooks/auth.ts). ProtectedRoute and useApiClient
+    // both read user/token from that store, not from ad-hoc keys like
+    // 'authToken' — writing the wrong shape here silently leaves the app
+    // treating every page as unauthenticated and redirecting to /login.
     await page.goto('/');
-    await page.evaluate(({ token, userId, orgId }) => {
-      localStorage.setItem('authToken', token as string);
-      localStorage.setItem('userId', userId);
-      localStorage.setItem('organizationId', orgId);
-    }, { token: coordinatorUser.token, userId: coordinatorUser.userId, orgId: coordinatorUser.organizationId });
-
-    // Option 2: Set authentication via cookies (if using cookie-based auth)
-    await page.context().addCookies([
-      {
-        name: 'authToken',
-        value: coordinatorUser.token!,
-        domain: 'localhost',
-        path: '/',
-        httpOnly: true,
-        secure: false,
-        sameSite: 'Lax',
+    await page.evaluate(
+      ({ token, user }) => {
+        localStorage.setItem(
+          'auth-storage',
+          JSON.stringify({
+            state: { user, token, isAuthenticated: true },
+            version: 0,
+          })
+        );
       },
-    ]);
+      {
+        token: coordinatorUser.token,
+        user: {
+          id: coordinatorUser.userId,
+          organizationId: coordinatorUser.organizationId,
+          email: coordinatorUser.email,
+          name: coordinatorUser.email,
+          roles: coordinatorUser.roles,
+          permissions: coordinatorUser.permissions,
+        },
+      }
+    );
 
-    // Option 3: Set authentication via HTTP headers (for API requests)
-    await page.setExtraHTTPHeaders({
-      Authorization: `Bearer ${coordinatorUser.token}`,
-      'X-User-Id': coordinatorUser.userId,
-      'X-Organization-Id': coordinatorUser.organizationId,
-      'X-Branch-Id': coordinatorUser.branchId,
-    });
+    // Reload so the app boots with the auth store already hydrated instead
+    // of racing the initial unauthenticated render.
+    await page.reload();
 
     await use(page);
   },
@@ -224,36 +229,37 @@ export async function createAuthenticatedPage(
 ): Promise<Page> {
   await page.goto('/');
 
-  // Set local storage
+  // Write auth state in the shape the app's Zustand auth store expects
+  // (packages/web/src/core/hooks/auth.ts persists to localStorage under
+  // 'auth-storage' as { state: { user, token, isAuthenticated }, version }).
+  // ProtectedRoute and useApiClient both read from this store — writing a
+  // different shape/key leaves every route treated as unauthenticated.
   await page.evaluate(
-    ({ token, userId, organizationId }) => {
-      localStorage.setItem('authToken', token as string);
-      localStorage.setItem('userId', userId);
-      localStorage.setItem('organizationId', organizationId);
+    ({ token, authUser }) => {
+      localStorage.setItem(
+        'auth-storage',
+        JSON.stringify({
+          state: { user: authUser, token, isAuthenticated: true },
+          version: 0,
+        })
+      );
     },
-    { token: user.token, userId: user.userId, organizationId: user.organizationId }
+    {
+      token: user.token,
+      authUser: {
+        id: user.userId,
+        organizationId: user.organizationId,
+        email: user.email,
+        name: user.email,
+        roles: user.roles,
+        permissions: user.permissions,
+      },
+    }
   );
 
-  // Set cookies
-  await page.context().addCookies([
-    {
-      name: 'authToken',
-      value: user.token!,
-      domain: 'localhost',
-      path: '/',
-      httpOnly: true,
-      secure: false,
-      sameSite: 'Lax',
-    },
-  ]);
-
-  // Set headers
-  await page.setExtraHTTPHeaders({
-    Authorization: `Bearer ${user.token}`,
-    'X-User-Id': user.userId,
-    'X-Organization-Id': user.organizationId,
-    'X-Branch-Id': user.branchId,
-  });
+  // Reload so the app boots with the auth store already hydrated instead of
+  // racing the initial unauthenticated render.
+  await page.reload();
 
   return page;
 }

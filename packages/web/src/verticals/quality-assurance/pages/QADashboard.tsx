@@ -6,13 +6,14 @@
  */
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, CheckCircle, Clock, TrendingUp, Plus } from 'lucide-react';
 import { Button, Card, LoadingSpinner } from '@/core/components';
 import { useAuditDashboard } from '../hooks';
 import { AuditCard, FindingCard, CorrectiveActionCard } from '../components';
 
 export const QADashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { data: dashboard, isLoading, error } = useAuditDashboard();
 
   if (isLoading) {
@@ -48,7 +49,7 @@ export const QADashboard: React.FC = () => {
             Monitor audits, findings, and corrective actions
           </p>
         </div>
-        <Link to="/audits/new">
+        <Link to="/quality-assurance/audits/new">
           <Button>
             <Plus className="h-4 w-4 mr-2" />
             New Audit
@@ -129,7 +130,7 @@ export const QADashboard: React.FC = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Upcoming Audits</h2>
-            <Link to="/audits?status=SCHEDULED">
+            <Link to="/quality-assurance/audits?status=SCHEDULED">
               <Button variant="ghost" size="sm">View All</Button>
             </Link>
           </div>
@@ -152,7 +153,7 @@ export const QADashboard: React.FC = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">In Progress</h2>
-            <Link to="/audits?status=IN_PROGRESS">
+            <Link to="/quality-assurance/audits?status=IN_PROGRESS">
               <Button variant="ghost" size="sm">View All</Button>
             </Link>
           </div>
@@ -175,7 +176,7 @@ export const QADashboard: React.FC = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Recently Completed</h2>
-            <Link to="/audits?status=COMPLETED">
+            <Link to="/quality-assurance/audits?status=COMPLETED">
               <Button variant="ghost" size="sm">View All</Button>
             </Link>
           </div>
@@ -204,14 +205,21 @@ export const QADashboard: React.FC = () => {
               <AlertTriangle className="h-5 w-5 text-red-600" />
               Critical Findings
             </h2>
-            <Link to="/audits/findings?severity=CRITICAL">
-              <Button variant="ghost" size="sm">View All</Button>
-            </Link>
+            {/* No dedicated findings-list page exists yet (tracked as a follow-up ticket).
+                A link here would fall through to /quality-assurance/audits/:id with
+                id="findings" and 500 (backend tries to parse "findings" as a UUID) —
+                removed rather than ship a broken "View All" per QA finding during GATE-2. */}
           </div>
           <div className="space-y-3">
             {dashboard.criticalFindings.length > 0 ? (
               dashboard.criticalFindings.map((finding) => (
-                <FindingCard key={finding.id} finding={finding} />
+                // No dedicated FindingDetailPage exists yet; navigate to the parent audit's
+                // detail page as a stand-in until a finding detail view is built.
+                <FindingCard
+                  key={finding.id}
+                  finding={finding}
+                  onClick={() => navigate(`/quality-assurance/audits/${finding.auditId}`)}
+                />
               ))
             ) : (
               <Card>
@@ -230,14 +238,20 @@ export const QADashboard: React.FC = () => {
               <Clock className="h-5 w-5 text-orange-600" />
               Overdue Corrective Actions
             </h2>
-            <Link to="/audits/corrective-actions?overdue=true">
+            <Link to="/quality-assurance/corrective-actions?overdue=true">
               <Button variant="ghost" size="sm">View All</Button>
             </Link>
           </div>
           <div className="space-y-3">
             {dashboard.overdueCorrectiveActions.length > 0 ? (
               dashboard.overdueCorrectiveActions.map((action) => (
-                <CorrectiveActionCard key={action.id} action={action} />
+                // No dedicated CorrectiveActionDetailPage exists yet; navigate to the parent
+                // audit's detail page as a stand-in until an action detail view is built.
+                <CorrectiveActionCard
+                  key={action.id}
+                  action={action}
+                  onClick={() => navigate(`/quality-assurance/audits/${action.auditId}`)}
+                />
               ))
             ) : (
               <Card>

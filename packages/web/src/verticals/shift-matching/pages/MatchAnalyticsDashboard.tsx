@@ -9,44 +9,26 @@
  * - Trends over time
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { TrendingUp, TrendingDown, Award, AlertCircle, Users, Clock } from 'lucide-react';
 import { LoadingSpinner } from '@/core/components';
 import { useQuery } from '@tanstack/react-query';
-import type { MatchingMetrics } from '../types';
+import { useShiftMatchingApi } from '../hooks/useShiftMatching';
 
 export const MatchAnalyticsDashboard: React.FC = () => {
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const shiftMatchingApi = useShiftMatchingApi();
 
-  // Mock data - in production, this would come from API
-  const { data: analytics, isLoading } = useQuery<MatchingMetrics>({
+  const { dateFrom, dateTo } = useMemo(() => {
+    const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90;
+    const to = new Date();
+    const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+    return { dateFrom: from.toISOString(), dateTo: to.toISOString() };
+  }, [dateRange]);
+
+  const { data: analytics, isLoading } = useQuery({
     queryKey: ['match-analytics', dateRange],
-    queryFn: async () => {
-      // This would call the actual API
-      return {
-        periodStart: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        periodEnd: new Date().toISOString(),
-        totalOpenShifts: 487,
-        shiftsMatched: 453,
-        shiftsUnmatched: 34,
-        matchRate: 93.0,
-        averageMatchScore: 84.2,
-        averageCandidatesPerShift: 5.3,
-        averageResponseTimeMinutes: 24,
-        proposalAcceptanceRate: 78.5,
-        proposalRejectionRate: 15.2,
-        proposalExpirationRate: 6.3,
-        excellentMatches: 189,
-        goodMatches: 201,
-        fairMatches: 63,
-        poorMatches: 0,
-        topRejectionReasons: [
-          { category: 'TOO_FAR', count: 23 },
-          { category: 'TIME_CONFLICT', count: 18 },
-          { category: 'PERSONAL_REASON', count: 12 },
-        ],
-      };
-    },
+    queryFn: () => shiftMatchingApi.getMatchingMetrics(dateFrom, dateTo),
   });
 
   if (isLoading) {

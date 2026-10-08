@@ -2,16 +2,20 @@ import React, { useState } from 'react';
 import { Plus, Lock, Unlock, Play } from 'lucide-react';
 import { Button, LoadingSpinner, EmptyState, ErrorMessage, Card } from '@/core/components';
 import { usePermissions } from '@/core/hooks';
-import { usePayPeriods, useCreatePayRun } from '../hooks';
+import { usePayPeriods, useCreatePayRun, useLockPayPeriod, useUnlockPayPeriod } from '../hooks';
+import { CreatePayPeriodModal } from '../components';
 import { formatDate, formatCurrency } from '../utils';
 import type { PayrollSearchFilters, PayPeriod } from '../types';
 
 export const PayPeriodManagement: React.FC = () => {
   const { can } = usePermissions();
   const [filters, setFilters] = useState<PayrollSearchFilters>({});
+  const [isCreatePeriodOpen, setIsCreatePeriodOpen] = useState(false);
 
   const { data: payPeriodData, isLoading, error, refetch } = usePayPeriods(filters);
   const createPayRun = useCreatePayRun();
+  const lockPayPeriod = useLockPayPeriod();
+  const unlockPayPeriod = useUnlockPayPeriod();
 
   if (isLoading) {
     return (
@@ -71,11 +75,17 @@ export const PayPeriodManagement: React.FC = () => {
           </p>
         </div>
         {can('payroll:write') && (
-          <Button leftIcon={<Plus className="h-4 w-4" />}>
+          <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setIsCreatePeriodOpen(true)}>
             Create Pay Period
           </Button>
         )}
       </div>
+
+      <CreatePayPeriodModal
+        isOpen={isCreatePeriodOpen}
+        onClose={() => setIsCreatePeriodOpen(false)}
+        onCreated={() => { void refetch(); }}
+      />
 
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
         <h3 className="text-lg font-semibold mb-4">Filters</h3>
@@ -154,7 +164,7 @@ export const PayPeriodManagement: React.FC = () => {
           description="Create your first pay period to get started with payroll processing."
           action={
             can('payroll:write') ? (
-              <Button leftIcon={<Plus className="h-4 w-4" />}>
+              <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setIsCreatePeriodOpen(true)}>
                 Create Pay Period
               </Button>
             ) : undefined
@@ -205,6 +215,8 @@ export const PayPeriodManagement: React.FC = () => {
                           variant="outline"
                           size="sm"
                           leftIcon={<Lock className="h-4 w-4" />}
+                          onClick={() => lockPayPeriod.mutate(period.id)}
+                          disabled={lockPayPeriod.isPending}
                         >
                           Lock
                         </Button>
@@ -215,6 +227,8 @@ export const PayPeriodManagement: React.FC = () => {
                             variant="outline"
                             size="sm"
                             leftIcon={<Unlock className="h-4 w-4" />}
+                            onClick={() => unlockPayPeriod.mutate(period.id)}
+                            disabled={unlockPayPeriod.isPending}
                           >
                             Unlock
                           </Button>

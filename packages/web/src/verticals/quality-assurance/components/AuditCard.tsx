@@ -34,7 +34,7 @@ const priorityColors: Record<AuditPriority, string> = {
 
 export const AuditCard: React.FC<AuditCardProps> = ({ audit }) => {
   return (
-    <Link to={`/audits/${audit.id}`}>
+    <Link to={`/quality-assurance/audits/${audit.id}`}>
       <Card className="hover:shadow-md transition-shadow cursor-pointer">
         <div className="p-4">
           {/* Header */}

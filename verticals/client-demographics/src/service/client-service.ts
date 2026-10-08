@@ -139,8 +139,17 @@ export class ClientService {
 
   /**
    * Get client by ID
+   *
+   * @param skipAuditLog - When true, suppresses the VIEW audit-log write for this
+   *   call. Used by internal callers (updateClient, deleteClient, addEmergencyContact,
+   *   etc.) that call getClientById purely as an existence/ownership check before
+   *   performing their own mutation — logging a VIEW for those would be audit-trail
+   *   noise, not a genuine PHI read. External callers (the GET /clients/:id handler,
+   *   getClientAuditTrail's own existence check) leave this false so real reads are
+   *   recorded. See FC-AUDIT-CLIENTS: this was previously never logged at all,
+   *   leaving the HIPAA access-audit trail always empty in normal usage.
    */
-  async getClientById(id: string, context: UserContext): Promise<Client> {
+  async getClientById(id: string, context: UserContext, skipAuditLog = false): Promise<Client> {
     this.permissionService.requirePermission(context, 'clients:read');
 
     const cache = getCacheService();
@@ -158,6 +167,21 @@ export class ClientService {
 
     // Check organizational scope
     this.checkOrganizationalAccess(client, context);
+
+    // HIPAA §164.312(b) access audit — record every genuine PHI read.
+    // Best-effort: a logging failure must never block the read itself.
+    if (!skipAuditLog && this.auditService) {
+      try {
+        await this.auditService.logAccess({
+          clientId: id,
+          accessedBy: context.userId,
+          accessType: 'VIEW',
+          accessTimestamp: new Date(),
+        });
+      } catch (error) {
+        console.error('Failed to write client access audit log:', error);
+      }
+    }
 
     return client;
   }
@@ -195,8 +219,8 @@ export class ClientService {
   ): Promise<Client> {
     this.permissionService.requirePermission(context, 'clients:update');
 
-    // Verify client exists
-    await this.getClientById(id, context);
+    // Verify client exists (internal existence check, not a PHI read — skip audit log)
+    await this.getClientById(id, context, true);
 
     // Validate updates
     const validation = this.validator.validateUpdate(updates);
@@ -244,8 +268,8 @@ export class ClientService {
   async deleteClient(id: string, context: UserContext): Promise<void> {
     this.permissionService.requirePermission(context, 'clients:delete');
 
-    // Verify client exists
-    const client = await this.getClientById(id, context);
+    // Verify client exists (internal existence check, not a PHI read — skip audit log)
+    const client = await this.getClientById(id, context, true);
     await this.repository.delete(id, context);
 
     // Invalidate cache
@@ -320,7 +344,8 @@ export class ClientService {
     contact: Omit<import('../types/client').EmergencyContact, 'id'>,
     context: UserContext
   ): Promise<Client> {
-    const client = await this.getClientById(clientId, context);
+    // Internal existence check feeding a mutation, not a standalone PHI read — skip audit log
+    const client = await this.getClientById(clientId, context, true);
 
     const newContact = {
       ...contact,
@@ -345,7 +370,8 @@ export class ClientService {
     updates: Partial<Omit<import('../types/client').EmergencyContact, 'id'>>,
     context: UserContext
   ): Promise<Client> {
-    const client = await this.getClientById(clientId, context);
+    // Internal existence check feeding a mutation, not a standalone PHI read — skip audit log
+    const client = await this.getClientById(clientId, context, true);
 
     const emergencyContacts = client.emergencyContacts.map((contact) =>
       contact.id === contactId ? { ...contact, ...updates } : contact
@@ -366,7 +392,8 @@ export class ClientService {
     contactId: string,
     context: UserContext
   ): Promise<Client> {
-    const client = await this.getClientById(clientId, context);
+    // Internal existence check feeding a mutation, not a standalone PHI read — skip audit log
+    const client = await this.getClientById(clientId, context, true);
 
     const emergencyContacts = client.emergencyContacts.filter(
       (contact) => contact.id !== contactId
@@ -387,7 +414,8 @@ export class ClientService {
     riskFlag: Omit<import('../types/client').RiskFlag, 'id'>,
     context: UserContext
   ): Promise<Client> {
-    const client = await this.getClientById(clientId, context);
+    // Internal existence check feeding a mutation, not a standalone PHI read — skip audit log
+    const client = await this.getClientById(clientId, context, true);
 
     const newFlag = {
       ...riskFlag,
@@ -408,7 +436,8 @@ export class ClientService {
     flagId: string,
     context: UserContext
   ): Promise<Client> {
-    const client = await this.getClientById(clientId, context);
+    // Internal existence check feeding a mutation, not a standalone PHI read — skip audit log
+    const client = await this.getClientById(clientId, context, true);
 
     const riskFlags = client.riskFlags.map((flag) =>
       flag.id === flagId ? { ...flag, resolvedDate: new Date() } : flag
@@ -426,7 +455,8 @@ export class ClientService {
     context: UserContext,
     reason?: string
   ): Promise<Client> {
-    const client = await this.getClientById(clientId, context);
+    // Internal existence check feeding a mutation, not a standalone PHI read — skip audit log
+    const client = await this.getClientById(clientId, context, true);
 
     const updates: UpdateClientInput = { status };
 
@@ -465,8 +495,11 @@ export class ClientService {
     // Require elevated permissions for audit access
     this.permissionService.requirePermission(context, 'clients:audit');
 
-    // Verify client exists and check access
-    await this.getClientById(clientId, context);
+    // Verify client exists and check access. This is an auditor inspecting
+    // compliance records, not a clinical PHI read — and logging a VIEW here would
+    // be confusing self-referential noise inside the very audit trail being
+    // inspected — so skip the audit log for this existence check.
+    await this.getClientById(clientId, context, true);
 
     // Check if audit service is available
     if (!this.auditService) {
@@ -492,7 +525,8 @@ export class ClientService {
   ): Promise<Client> {
     this.permissionService.requirePermission(context, 'clients:update');
 
-    const client = await this.getClientById(clientId, context);
+    // Internal existence check feeding a mutation, not a standalone PHI read — skip audit log
+    const client = await this.getClientById(clientId, context, true);
 
     if (!client.primaryAddress) {
       throw new ValidationError('Client has no address to geocode');

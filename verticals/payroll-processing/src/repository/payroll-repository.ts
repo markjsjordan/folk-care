@@ -167,7 +167,7 @@ export class PayrollRepository {
       params
     );
 
-    return result.rows.map(this.mapPayPeriod);
+    return result.rows.map((row) => this.mapPayPeriod(row));
   }
 
   async updatePayPeriod(
@@ -277,7 +277,7 @@ export class PayrollRepository {
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
         $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
         $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
-        $41, $42, $43, $44, $45, $46, $47, $48, $49
+        $41, $42, $43, $44, $45, $46, $47, $48, $49, $50
       )
       RETURNING *
       `,
@@ -409,7 +409,7 @@ export class PayrollRepository {
       params
     );
 
-    return result.rows.map(this.mapTimeSheet);
+    return result.rows.map((row) => this.mapTimeSheet(row));
   }
 
   async updateTimeSheet(
@@ -503,7 +503,8 @@ export class PayrollRepository {
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
         $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
         $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
-        $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51
+        $41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
+        $51, $52, $53, $54, $55
       )
       RETURNING *
       `,
@@ -569,8 +570,9 @@ export class PayrollRepository {
     return this.mapPayRun(result.rows[0]);
   }
 
-  async findPayRunById(id: UUID): Promise<PayRun | null> {
-    const result = await this.pool.query(
+  async findPayRunById(id: UUID, client?: PoolClient): Promise<PayRun | null> {
+    const db = client || this.pool;
+    const result = await db.query(
       'SELECT * FROM pay_runs WHERE id = $1',
       [id]
     );
@@ -582,14 +584,16 @@ export class PayrollRepository {
       'SELECT * FROM pay_runs WHERE pay_period_id = $1 ORDER BY created_at DESC',
       [payPeriodId]
     );
-    return result.rows.map(this.mapPayRun);
+    return result.rows.map((row) => this.mapPayRun(row));
   }
 
   async updatePayRun(
     id: UUID,
-    updates: Partial<PayRun>
+    updates: Partial<PayRun>,
+    client?: PoolClient
   ): Promise<PayRun | null> {
-    const existing = await this.findPayRunById(id);
+    const db = client || this.pool;
+    const existing = await this.findPayRunById(id, client);
     if (!existing) return null;
 
     const fields: string[] = [];
@@ -631,6 +635,46 @@ export class PayrollRepository {
       params.push(updates.processedBy);
     }
 
+    if (updates.payStubIds !== undefined) {
+      fields.push(`pay_stub_ids = $${paramIndex++}`);
+      params.push(JSON.stringify(updates.payStubIds));
+    }
+
+    if (updates.totalPayStubs !== undefined) {
+      fields.push(`total_pay_stubs = $${paramIndex++}`);
+      params.push(updates.totalPayStubs);
+    }
+
+    if (updates.totalCaregivers !== undefined) {
+      fields.push(`total_caregivers = $${paramIndex++}`);
+      params.push(updates.totalCaregivers);
+    }
+
+    if (updates.totalHours !== undefined) {
+      fields.push(`total_hours = $${paramIndex++}`);
+      params.push(updates.totalHours);
+    }
+
+    if (updates.totalGrossPay !== undefined) {
+      fields.push(`total_gross_pay = $${paramIndex++}`);
+      params.push(updates.totalGrossPay);
+    }
+
+    if (updates.totalDeductions !== undefined) {
+      fields.push(`total_deductions = $${paramIndex++}`);
+      params.push(updates.totalDeductions);
+    }
+
+    if (updates.totalTaxWithheld !== undefined) {
+      fields.push(`total_tax_withheld = $${paramIndex++}`);
+      params.push(updates.totalTaxWithheld);
+    }
+
+    if (updates.totalNetPay !== undefined) {
+      fields.push(`total_net_pay = $${paramIndex++}`);
+      params.push(updates.totalNetPay);
+    }
+
     if (fields.length === 0) return existing;
 
     fields.push(`updated_at = $${paramIndex++}`);
@@ -638,7 +682,7 @@ export class PayrollRepository {
     fields.push(`version = version + 1`);
     params.push(id);
 
-    const result = await this.pool.query(
+    const result = await db.query(
       `UPDATE pay_runs SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
       params
     );
@@ -699,7 +743,9 @@ export class PayrollRepository {
         $41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
         $51, $52, $53, $54, $55, $56, $57, $58, $59, $60,
         $61, $62, $63, $64, $65, $66, $67, $68, $69, $70,
-        $71, $72, $73, $74, $75, $76, $77, $78, $79, $80, $81
+        $71, $72, $73, $74, $75, $76, $77, $78, $79, $80,
+        $81, $82, $83, $84, $85, $86, $87, $88, $89, $90,
+        $91, $92, $93, $94, $95, $96
       )
       RETURNING *
       `,
@@ -866,7 +912,7 @@ export class PayrollRepository {
       params
     );
 
-    return result.rows.map(this.mapPayStub);
+    return result.rows.map((row) => this.mapPayStub(row));
   }
 
   /**
@@ -898,7 +944,7 @@ export class PayrollRepository {
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
+        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
       )
       RETURNING *
       `,
@@ -1019,7 +1065,7 @@ export class PayrollRepository {
        ORDER BY deduction_type`,
       [caregiverId]
     );
-    return result.rows.map(this.mapDeduction);
+    return result.rows.map((row) => this.mapDeduction(row));
   }
 
   /**
@@ -1054,7 +1100,7 @@ export class PayrollRepository {
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
         $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-        $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41
+        $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42
       )
       RETURNING *
       `,
@@ -1159,7 +1205,7 @@ export class PayrollRepository {
       params
     );
 
-    return result.rows.map(this.mapPaymentRecord);
+    return result.rows.map((row) => this.mapPaymentRecord(row));
   }
 
   /**
@@ -1191,7 +1237,7 @@ export class PayrollRepository {
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
+        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
       )
       RETURNING *
       `,
@@ -1235,8 +1281,104 @@ export class PayrollRepository {
   }
 
   /**
+   * Aggregate payroll summary statistics across pay runs and timesheets for
+   * an organization. Backs GET /api/payroll/summary.
+   */
+  async getPayrollSummary(organizationId: UUID): Promise<{
+    currentPeriod: PayPeriod | null;
+    totalCaregivers: number;
+    totalHours: number;
+    totalGrossPay: number;
+    totalTaxWithheld: number;
+    pendingApprovals: number;
+    recentPayRuns: { total: number; completed: number; failed: number };
+    ytdTotals: { grossPay: number; netPay: number; taxWithheld: number };
+  }> {
+    // Current/most-recent active pay period (mirrors GET /payroll/current-period).
+    const activePeriods = await this.findPayPeriods({
+      organizationId,
+      status: ['OPEN', 'LOCKED', 'PROCESSING'],
+    });
+    const sortedActivePeriods = [...activePeriods].sort(
+      (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+    );
+    const currentPeriod = sortedActivePeriods[0] ?? null;
+
+    // Pending approvals: timesheets awaiting review/approval for this org.
+    const pendingTimeSheets = await this.findTimeSheets({
+      organizationId,
+      status: ['SUBMITTED', 'PENDING_REVIEW'],
+    });
+
+    // Recent pay runs (last 90 days) across all periods for this org, plus YTD totals.
+    const recentResult = await this.pool.query(
+      `SELECT
+         COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE status = 'PROCESSED') AS completed,
+         COUNT(*) FILTER (WHERE has_errors = true) AS failed,
+         COALESCE(SUM(total_caregivers), 0) AS sum_caregivers,
+         COALESCE(SUM(total_hours), 0) AS sum_hours,
+         COALESCE(SUM(total_gross_pay), 0) AS sum_gross_pay,
+         COALESCE(SUM(total_tax_withheld), 0) AS sum_tax_withheld
+       FROM pay_runs
+       WHERE organization_id = $1
+         AND created_at >= NOW() - INTERVAL '90 days'`,
+      [organizationId]
+    );
+    const recentRow = recentResult.rows[0] as Record<string, unknown>;
+
+    const ytdResult = await this.pool.query(
+      `SELECT
+         COALESCE(SUM(total_gross_pay), 0) AS gross_pay,
+         COALESCE(SUM(total_net_pay), 0) AS net_pay,
+         COALESCE(SUM(total_tax_withheld), 0) AS tax_withheld
+       FROM pay_runs
+       WHERE organization_id = $1
+         AND status = 'PROCESSED'
+         AND date_part('year', pay_date) = date_part('year', CURRENT_DATE)`,
+      [organizationId]
+    );
+    const ytdRow = ytdResult.rows[0] as Record<string, unknown>;
+
+    return {
+      currentPeriod,
+      totalCaregivers: Number(recentRow['sum_caregivers'] ?? 0),
+      totalHours: Number(recentRow['sum_hours'] ?? 0),
+      totalGrossPay: Number(recentRow['sum_gross_pay'] ?? 0),
+      totalTaxWithheld: Number(recentRow['sum_tax_withheld'] ?? 0),
+      pendingApprovals: pendingTimeSheets.length,
+      recentPayRuns: {
+        total: Number(recentRow['total'] ?? 0),
+        completed: Number(recentRow['completed'] ?? 0),
+        failed: Number(recentRow['failed'] ?? 0),
+      },
+      ytdTotals: {
+        grossPay: Number(ytdRow['gross_pay'] ?? 0),
+        netPay: Number(ytdRow['net_pay'] ?? 0),
+        taxWithheld: Number(ytdRow['tax_withheld'] ?? 0),
+      },
+    };
+  }
+
+  /**
    * Mappers - Convert DB rows to domain models
    */
+
+  /**
+   * Parse a jsonb/json column value that the pg driver may return either as
+   * an already-parsed object/array (jsonb columns are auto-parsed by `pg`)
+   * or, in some code paths, as a raw string. Defensive against both shapes
+   * so the mappers below don't crash with "[object Object] is not valid
+   * JSON" when `pg` has already deserialized the value.
+   */
+  private parseJsonColumn<T>(value: unknown, fallback: T): T {
+    if (value == null) return fallback;
+    if (typeof value === 'string') {
+      if (value.length === 0) return fallback;
+      return JSON.parse(value) as T;
+    }
+    return value as T;
+  }
 
   private mapPayPeriod(row: Record<string, unknown>): PayPeriod {
     return {
@@ -1250,7 +1392,7 @@ export class PayrollRepository {
       endDate: row['end_date'] as Date,
       payDate: row['pay_date'] as Date,
       status: row['status'] as PayPeriod['status'],
-      statusHistory: JSON.parse(row['status_history'] as string || '[]'),
+      statusHistory: this.parseJsonColumn(row['status_history'], []),
       ...(row['cutoff_date'] != null && { cutoffDate: row['cutoff_date'] as Date }),
       ...(row['approval_deadline'] != null && { approvalDeadline: row['approval_deadline'] as Date }),
       ...(row['pay_run_id'] != null && { payRunId: row['pay_run_id'] as UUID }),
@@ -1280,7 +1422,7 @@ export class PayrollRepository {
       caregiverId: row['caregiver_id'] as UUID,
       caregiverName: row['caregiver_name'] as string,
       caregiverEmployeeId: row['caregiver_employee_id'] as string,
-      timeEntries: JSON.parse(row['time_entries'] as string),
+      timeEntries: this.parseJsonColumn(row['time_entries'], []),
       regularHours: row['regular_hours'] as number,
       overtimeHours: row['overtime_hours'] as number,
       doubleTimeHours: row['double_time_hours'] as number,
@@ -1300,22 +1442,22 @@ export class PayrollRepository {
       sickEarnings: row['sick_earnings'] as number,
       otherEarnings: row['other_earnings'] as number,
       grossEarnings: row['gross_earnings'] as number,
-      bonuses: JSON.parse(row['bonuses'] as string),
-      reimbursements: JSON.parse(row['reimbursements'] as string),
-      adjustments: JSON.parse(row['adjustments'] as string),
+      bonuses: this.parseJsonColumn(row['bonuses'], []),
+      reimbursements: this.parseJsonColumn(row['reimbursements'], []),
+      adjustments: this.parseJsonColumn(row['adjustments'], []),
       totalAdjustments: row['total_adjustments'] as number,
       totalGrossPay: row['total_gross_pay'] as number,
       status: row['status'] as TimeSheet['status'],
-      statusHistory: JSON.parse(row['status_history'] as string || '[]'),
+      statusHistory: this.parseJsonColumn(row['status_history'], []),
       ...(row['submitted_at'] != null && { submittedAt: row['submitted_at'] as Date }),
       ...(row['submitted_by'] != null && { submittedBy: row['submitted_by'] as UUID }),
       ...(row['approved_at'] != null && { approvedAt: row['approved_at'] as Date }),
       ...(row['approved_by'] != null && { approvedBy: row['approved_by'] as UUID }),
       ...(row['approval_notes'] != null && { approvalNotes: row['approval_notes'] as string }),
       hasDiscrepancies: row['has_discrepancies'] as boolean,
-      discrepancyFlags: JSON.parse(row['discrepancy_flags'] as string || '[]'),
-      evvRecordIds: JSON.parse(row['evv_record_ids'] as string),
-      visitIds: JSON.parse(row['visit_ids'] as string),
+      discrepancyFlags: this.parseJsonColumn(row['discrepancy_flags'], []),
+      evvRecordIds: this.parseJsonColumn(row['evv_record_ids'], []),
+      visitIds: this.parseJsonColumn(row['visit_ids'], []),
       ...(row['notes'] != null && { notes: row['notes'] as string }),
       ...(row['review_notes'] != null && { reviewNotes: row['review_notes'] as string }),
       createdAt: row['created_at'] as Date,
@@ -1340,7 +1482,7 @@ export class PayrollRepository {
       runNumber: row['run_number'] as string,
       runType: row['run_type'] as PayRun['runType'],
       status: row['status'] as PayRun['status'],
-      statusHistory: JSON.parse(row['status_history'] as string || '[]'),
+      statusHistory: this.parseJsonColumn(row['status_history'], []),
       ...(row['initiated_at'] != null && { initiatedAt: row['initiated_at'] as Date }),
       ...(row['initiated_by'] != null && { initiatedBy: row['initiated_by'] as UUID }),
       ...(row['calculated_at'] != null && { calculatedAt: row['calculated_at'] as Date }),
@@ -1348,7 +1490,7 @@ export class PayrollRepository {
       ...(row['approved_by'] != null && { approvedBy: row['approved_by'] as UUID }),
       ...(row['processed_at'] != null && { processedAt: row['processed_at'] as Date }),
       ...(row['processed_by'] != null && { processedBy: row['processed_by'] as UUID }),
-      payStubIds: JSON.parse(row['pay_stub_ids'] as string),
+      payStubIds: this.parseJsonColumn(row['pay_stub_ids'], []),
       totalPayStubs: row['total_pay_stubs'] as number,
       totalCaregivers: row['total_caregivers'] as number,
       totalHours: row['total_hours'] as number,
@@ -1372,12 +1514,12 @@ export class PayrollRepository {
       cashAmount: row['cash_amount'] as number,
       ...(row['payroll_register_url'] != null && { payrollRegisterUrl: row['payroll_register_url'] as string }),
       ...(row['tax_report_url'] != null && { taxReportUrl: row['tax_report_url'] as string }),
-      exportFiles: JSON.parse(row['export_files'] as string || '[]'),
-      complianceChecks: JSON.parse(row['compliance_checks'] as string || '[]'),
+      exportFiles: this.parseJsonColumn(row['export_files'], []),
+      complianceChecks: this.parseJsonColumn(row['compliance_checks'], []),
       compliancePassed: row['compliance_passed'] as boolean,
       hasErrors: row['has_errors'] as boolean,
-      errors: JSON.parse(row['errors'] as string || '[]'),
-      warnings: JSON.parse(row['warnings'] as string || '[]'),
+      errors: this.parseJsonColumn(row['errors'], []),
+      warnings: this.parseJsonColumn(row['warnings'], []),
       ...(row['notes'] != null && { notes: row['notes'] as string }),
       ...(row['internal_notes'] != null && { internalNotes: row['internal_notes'] as string }),
       createdAt: row['created_at'] as Date,
@@ -1399,7 +1541,7 @@ export class PayrollRepository {
       timeSheetId: row['time_sheet_id'] as UUID,
       caregiverName: row['caregiver_name'] as string,
       caregiverEmployeeId: row['caregiver_employee_id'] as string,
-      ...(row['caregiver_address'] != null && { caregiverAddress: JSON.parse(row['caregiver_address'] as string) }),
+      ...(row['caregiver_address'] != null && { caregiverAddress: this.parseJsonColumn(row['caregiver_address'], undefined) }),
       payPeriodStartDate: row['pay_period_start_date'] as Date,
       payPeriodEndDate: row['pay_period_end_date'] as Date,
       payDate: row['pay_date'] as Date,
@@ -1426,7 +1568,7 @@ export class PayrollRepository {
       otherEarnings: row['other_earnings'] as number,
       currentGrossPay: row['current_gross_pay'] as number,
       yearToDateGrossPay: row['year_to_date_gross_pay'] as number,
-      deductions: JSON.parse(row['deductions'] as string),
+      deductions: this.parseJsonColumn(row['deductions'], []),
       federalIncomeTax: row['federal_income_tax'] as number,
       stateIncomeTax: row['state_income_tax'] as number,
       localIncomeTax: row['local_income_tax'] as number,
@@ -1465,7 +1607,7 @@ export class PayrollRepository {
       ...(row['check_date'] != null && { checkDate: row['check_date'] as Date }),
       ...(row['check_status'] != null && { checkStatus: row['check_status'] as CheckStatus }),
       status: row['status'] as PayStub['status'],
-      statusHistory: JSON.parse(row['status_history'] as string || '[]'),
+      statusHistory: this.parseJsonColumn(row['status_history'], []),
       calculatedAt: row['calculated_at'] as Date,
       ...(row['calculated_by'] != null && { calculatedBy: row['calculated_by'] as UUID }),
       ...(row['approved_at'] != null && { approvedAt: row['approved_at'] as Date }),

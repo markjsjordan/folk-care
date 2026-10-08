@@ -12,6 +12,11 @@ export * from './types/billing';
 // Export repository
 export { BillingRepository } from './repository/billing-repository';
 
+// Export service
+export { BillingService } from './service/billing-service';
+export { InvoicePdfGeneratorService } from './service/invoice-pdf-generator.service';
+export { EVVBillingGateService, EVVGateBlockedError } from './service/evv-billing-gate-service.js';
+
 // Export validation
 export * from './validation/billing-validator';
 

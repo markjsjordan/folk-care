@@ -20,12 +20,12 @@ export function createMobileRouter(db: Database): Router {
 
   router.get('/mobile/caregiver/today', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (req.userContext === undefined) {
+      if (req.user === undefined) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
         return;
       }
       
-      const userId = req.userContext.userId;
+      const userId = req.user.userId;
       const today = new Date().toISOString().split('T')[0];
 
       const result = await db.query(
@@ -66,12 +66,12 @@ export function createMobileRouter(db: Database): Router {
 
   router.get('/mobile/visits/:id', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (req.userContext === undefined) {
+      if (req.user === undefined) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
         return;
       }
       
-      const userId = req.userContext.userId;
+      const userId = req.user.userId;
       const { id } = req.params;
 
       const result = await db.query(
@@ -98,12 +98,12 @@ export function createMobileRouter(db: Database): Router {
 
   router.post('/mobile/visits/:id/start', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (req.userContext === undefined) {
+      if (req.user === undefined) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
         return;
       }
       
-      const userId = req.userContext.userId;
+      const userId = req.user.userId;
       const { id } = req.params;
       const { location, deviceInfo } = req.body;
 
@@ -173,12 +173,12 @@ export function createMobileRouter(db: Database): Router {
 
   router.post('/mobile/visits/:id/end', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (req.userContext === undefined) {
+      if (req.user === undefined) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
         return;
       }
       
-      const userId = req.userContext.userId;
+      const userId = req.user.userId;
       const { id } = req.params;
       const { location, deviceInfo, notes } = req.body;
 
@@ -248,12 +248,12 @@ export function createMobileRouter(db: Database): Router {
 
   router.get('/mobile/visits/:id/tasks', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (req.userContext === undefined) {
+      if (req.user === undefined) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
         return;
       }
       
-      const userId = req.userContext.userId;
+      const userId = req.user.userId;
       const { id } = req.params;
 
       const result = await db.query(
@@ -273,12 +273,12 @@ export function createMobileRouter(db: Database): Router {
 
   router.post('/mobile/tasks/:id/complete', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (req.userContext === undefined) {
+      if (req.user === undefined) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
         return;
       }
       
-      const userId = req.userContext.userId;
+      const userId = req.user.userId;
       const { id } = req.params;
       const { notes, completedValue } = req.body;
 
@@ -306,13 +306,13 @@ export function createMobileRouter(db: Database): Router {
 
   router.post('/mobile/device/register', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (req.userContext === undefined) {
+      if (req.user === undefined) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
         return;
       }
       
-      const userId = req.userContext.userId;
-      const organizationId = req.userContext.organizationId;
+      const userId = req.user.userId;
+      const organizationId = req.user.organizationId;
       const { deviceId, deviceName, deviceType, osVersion, appVersion, manufacturer, model, pushToken, pushProvider } = req.body;
 
       if (deviceId === undefined || deviceId === '' || 

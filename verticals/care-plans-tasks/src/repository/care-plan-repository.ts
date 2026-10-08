@@ -747,8 +747,12 @@ export class CarePlanRepository extends Repository<CarePlan> {
       input.content,
       JSON.stringify(input.goalProgress || []),
       JSON.stringify(input.observations || []),
-      JSON.stringify(input.concerns || []),
-      JSON.stringify(input.recommendations || []),
+      // concerns/recommendations are text[] columns in Postgres, not jsonb —
+      // pg's driver maps a plain JS array to a real array literal (e.g. {a,b}),
+      // whereas JSON.stringify([]) produces the string "[]" which Postgres
+      // rejects with "malformed array literal" (array syntax uses {}, not []).
+      input.concerns ?? [],
+      input.recommendations ?? [],
       input.signature ? JSON.stringify(input.signature) : null,
     ]);
 

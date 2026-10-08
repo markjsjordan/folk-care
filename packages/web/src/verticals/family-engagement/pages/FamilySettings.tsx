@@ -6,15 +6,17 @@
  */
 
 import React, { useState } from 'react';
+import toast from 'react-hot-toast';
 import { useFamilyMemberProfile } from '../hooks';
+import { useAuth } from '@/core/hooks';
 import { NotificationSettings } from '../components/NotificationSettings';
 import type { FamilyMember, FamilyRelationship } from '@folkcare/family-engagement';
-
-// Mock family member ID - in real app would come from auth context
-const MOCK_FAMILY_MEMBER_ID = 'fm-demo-001';
+import type { UUID } from '@folkcare/core/browser';
 
 export const FamilySettings: React.FC = () => {
-  const { data: familyMember, isLoading, error } = useFamilyMemberProfile(MOCK_FAMILY_MEMBER_ID);
+  const { user } = useAuth();
+  const familyMemberId = user?.id as UUID | null;
+  const { data: familyMember, isLoading, error } = useFamilyMemberProfile(familyMemberId);
   const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'data'>('profile');
 
   if (isLoading) {
@@ -118,9 +120,10 @@ const ProfileTab: React.FC<{ familyMember: FamilyMember }> = ({ familyMember }) 
   });
 
   const handleSave = () => {
-    // TODO: Wire up to API
-    console.log('Saving profile:', formData);
-    alert('Profile update would be saved here (API integration pending)');
+    // No backend endpoint exists yet to persist family member profile edits
+    // (family-portal-api.ts only supports notification preference updates).
+    // Honest no-op stub until that endpoint is built — do not pretend success.
+    toast.error('Profile editing is not yet available');
     setIsEditing(false);
   };
 

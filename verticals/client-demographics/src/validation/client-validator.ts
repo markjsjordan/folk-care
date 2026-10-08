@@ -22,8 +22,8 @@ const addressSchema = z.object({
   country: z.string().default('US'),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
-  validFrom: z.date().optional(),
-  validTo: z.date().optional(),
+  validFrom: z.coerce.date().optional(),
+  validTo: z.coerce.date().optional(),
 });
 
 const emergencyContactSchema = z.object({
@@ -44,7 +44,7 @@ const createClientSchema = z.object({
   middleName: z.string().max(100).optional(),
   lastName: z.string().min(1, 'Last name required').max(100),
   preferredName: z.string().max(100).optional(),
-  dateOfBirth: z.date().refine(
+  dateOfBirth: z.coerce.date().refine(
     (date) => {
       const age = (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24 * 365);
       return age >= 0 && age <= 150;
@@ -57,7 +57,7 @@ const createClientSchema = z.object({
   primaryAddress: addressSchema,
   emergencyContacts: z.array(emergencyContactSchema).optional(),
   referralSource: z.string().max(200).optional(),
-  intakeDate: z.date().optional(),
+  intakeDate: z.coerce.date().optional(),
   status: z
     .enum([
       'INQUIRY',
@@ -77,7 +77,7 @@ const updateClientSchema = z
     middleName: z.string().max(100).optional(),
     lastName: z.string().min(1).max(100).optional(),
     preferredName: z.string().max(100).optional(),
-    dateOfBirth: z.date().optional(),
+    dateOfBirth: z.coerce.date().optional(),
     gender: z.enum(['MALE', 'FEMALE', 'NON_BINARY', 'OTHER', 'PREFER_NOT_TO_SAY']).optional(),
     primaryPhone: phoneSchema.optional(),
     alternatePhone: phoneSchema.optional(),

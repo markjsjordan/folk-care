@@ -5,12 +5,31 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { Database, isValidUUID, ComplianceAutopilotService, AuditService, UserContext } from '@folkcare/core';
-import { requireAuth } from '../middleware/auth-context.js';
+import { Database, isValidUUID, ComplianceAutopilotService, AuditService, UserContext, AuthMiddleware } from '@folkcare/core';
 import { ScheduleRepository, StaffingDemandPredictionService, CaregiverMatchingService } from '@folkcare/scheduling-visits';
 import { ComplianceCheckingService, complianceCheckRequestSchema, DocumentationQualityService, HospitalizationRiskService, VitalsAnomalyService, SentimentAnalysisService, ReportGenerationService } from '@folkcare/visit-notes';
 import { VisitDurationPredictionService } from '@folkcare/scheduling-visits';
 import knex from 'knex';
+
+/**
+ * Extract user context from authenticated request
+ *
+ * SECURITY: Reads from req.user (set by AuthMiddleware.requireAuth after
+ * real JWT verification), never from req.userContext, which was previously
+ * populated from spoofable X-User-Id / X-Organization-Id headers by the
+ * now-removed global authContextMiddleware mock. That mismatch was the
+ * root cause of a confirmed live exploit.
+ */
+function getUserContext(req: Request): UserContext {
+  const user = req.user!;
+  return {
+    userId: user.userId,
+    organizationId: user.organizationId,
+    branchIds: user.branchIds,
+    roles: user.roles,
+    permissions: user.permissions,
+  };
+}
 
 /**
  * Create a Knex instance for AI services that need it.
@@ -88,9 +107,10 @@ function validateDateRangeParams(
 
 export function createVisitRouter(db: Database): Router {
   const router = Router();
+  const authMiddleware = new AuthMiddleware(db);
 
   // All routes require authentication
-  router.use(requireAuth);
+  router.use(authMiddleware.requireAuth);
 
   /**
    * GET /api/visits/my-visits
@@ -104,7 +124,7 @@ export function createVisitRouter(db: Database): Router {
    */
   router.get('/my-visits', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const context = req.userContext!;
+      const context = getUserContext(req);
 
       // Validate query parameters
       const startDateStr = req.query['start_date'] as string | undefined;
@@ -213,7 +233,7 @@ export function createVisitRouter(db: Database): Router {
    */
   router.get('/calendar', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const context = req.userContext!;
+      const context = getUserContext(req);
 
       // Validate query parameters
       const startDateStr = req.query['start_date'] as string | undefined;
@@ -318,7 +338,7 @@ export function createVisitRouter(db: Database): Router {
   // eslint-disable-next-line sonarjs/cognitive-complexity -- Well-structured with validation, compliance, and assignment sections
   router.put('/:id/assign', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const context = req.userContext!;
+      const context = getUserContext(req);
       const { id: visitId } = req.params;
       const { 
         caregiverId, 
@@ -582,7 +602,7 @@ export function createVisitRouter(db: Database): Router {
    */
   router.post('/:id/check-conflicts', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const context = req.userContext!;
+      const context = getUserContext(req);
       const { id: visitId } = req.params;
       const { caregiverId } = req.body;
 
@@ -688,7 +708,7 @@ export function createVisitRouter(db: Database): Router {
    */
   router.post('/:id/check-assignment', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const context = req.userContext!;
+      const context = getUserContext(req);
       const { id: visitId } = req.params;
       const { caregiverId } = req.body;
 
@@ -865,7 +885,7 @@ export function createVisitRouter(db: Database): Router {
    */
   router.get('/caregivers/availability', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const context = req.userContext!;
+      const context = getUserContext(req);
       const dateStr = req.query['date'] as string | undefined;
       const branchIdsStr = req.query['branch_ids'] as string | undefined;
 
@@ -979,7 +999,7 @@ export function createVisitRouter(db: Database): Router {
    */
   router.post('/:id/notes', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const context = req.userContext!;
+      const context = getUserContext(req);
       const { id: visitId } = req.params;
       
       // Validate required fields
@@ -1115,7 +1135,7 @@ export function createVisitRouter(db: Database): Router {
 // POST /visits/compliance-check
   // Automated compliance checking for visits (AI-powered)
   // eslint-disable-next-line sonarjs/cognitive-complexity -- Sequential validation guards are inherently branchy
-  router.post('/compliance-check', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/compliance-check', async (req: Request, res: Response, next: NextFunction) => {
     const knexDb = getKnexInstance();
     const auditService = new AuditService(db);
 
@@ -1232,7 +1252,7 @@ export function createVisitRouter(db: Database): Router {
 
   // POST /visits/:visitId/notes/:noteId/quality-score
   // Score documentation quality for a visit note
-  router.post('/:visitId/notes/:noteId/quality-score', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/:visitId/notes/:noteId/quality-score', async (req: Request, res: Response, next: NextFunction) => {
     const knexDbForQuality = getKnexInstance();
     try {
       const { noteId } = req.params;
@@ -1258,7 +1278,7 @@ export function createVisitRouter(db: Database): Router {
 
   // POST /visits/hospitalization-risk
   // Predict hospitalization risk for a client
-  router.post('/hospitalization-risk', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/hospitalization-risk', async (req: Request, res: Response, next: NextFunction) => {
     const knexDbForRisk = getKnexInstance();
     try {
       const { clientId, lookbackDays } = req.body as { clientId?: string; lookbackDays?: number };
@@ -1287,7 +1307,7 @@ export function createVisitRouter(db: Database): Router {
 
   // POST /visits/vitals-anomalies
   // Detect anomalies in vital signs patterns
-  router.post('/vitals-anomalies', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/vitals-anomalies', async (req: Request, res: Response, next: NextFunction) => {
     const knexDbForVitals = getKnexInstance();
     try {
       const { clientId, lookbackDays } = req.body as { clientId?: string; lookbackDays?: number };
@@ -1316,7 +1336,7 @@ export function createVisitRouter(db: Database): Router {
 
   // POST /visits/sentiment-analysis
   // Analyze sentiment in visit notes to detect burnout, distress, concerns
-  router.post('/sentiment-analysis', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/sentiment-analysis', async (req: Request, res: Response, next: NextFunction) => {
     const knexDbForSentiment = getKnexInstance();
     try {
       const { clientId, caregiverId, lookbackDays } = req.body as { clientId?: string; caregiverId?: string; lookbackDays?: number };
@@ -1346,7 +1366,7 @@ export function createVisitRouter(db: Database): Router {
 
   // POST /visits/generate-report
   // Generate AI-powered narrative reports from visit data
-  router.post('/generate-report', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/generate-report', async (req: Request, res: Response, next: NextFunction) => {
     const knexDbForReport = getKnexInstance();
     try {
       const { reportType, format, clientId, caregiverId, organizationId, startDate, endDate, includeRecommendations, customPrompt } = req.body as {
@@ -1392,7 +1412,7 @@ export function createVisitRouter(db: Database): Router {
 
   // POST /visits/predict-duration
   // Predict visit duration based on client needs and history
-  router.post('/predict-duration', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/predict-duration', async (req: Request, res: Response, next: NextFunction) => {
     const knexDbForDuration = getKnexInstance();
     try {
       const { clientId, visitType, caregiverId, scheduledDate, tasksPlanned } = req.body as {
@@ -1435,7 +1455,7 @@ export function createVisitRouter(db: Database): Router {
 
   // POST /visits/staffing-demand
   // AI-powered staffing demand prediction based on census and acuity
-  router.post('/staffing-demand', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/staffing-demand', async (req: Request, res: Response, next: NextFunction) => {
     const knexDbForStaffing = getKnexInstance();
     try {
       const organizationId = req.user?.organizationId;
@@ -1472,7 +1492,7 @@ export function createVisitRouter(db: Database): Router {
 
   // POST /visits/caregiver-matching
   // AI-powered caregiver-patient matching based on skills, availability, and preferences
-  router.post('/caregiver-matching', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/caregiver-matching', async (req: Request, res: Response, next: NextFunction) => {
     const knexDbForMatching = getKnexInstance();
     try {
       const organizationId = req.user?.organizationId;

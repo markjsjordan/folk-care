@@ -57,7 +57,7 @@ export const EVVRecordDetail: React.FC = () => {
 
           <div>
             <h3 className="text-sm font-medium text-gray-500 mb-1">Status</h3>
-            <p className="text-lg font-semibold">{record.status.replace('_', ' ')}</p>
+            <p className="text-lg font-semibold">{record.recordStatus.replace('_', ' ')}</p>
           </div>
 
           <div>
@@ -72,20 +72,20 @@ export const EVVRecordDetail: React.FC = () => {
             </div>
           )}
 
-          {record.totalMinutes && (
+          {record.totalDuration && (
             <div>
               <h3 className="text-sm font-medium text-gray-500 mb-1">Total Duration</h3>
-              <p className="text-lg font-semibold">{record.totalMinutes} minutes</p>
+              <p className="text-lg font-semibold">{record.totalDuration} minutes</p>
             </div>
           )}
 
           <div>
-            <h3 className="text-sm font-medium text-gray-500 mb-1">Verification Method</h3>
-            <p className="text-lg">{record.verificationMethod}</p>
+            <h3 className="text-sm font-medium text-gray-500 mb-1">Verification Level</h3>
+            <p className="text-lg">{record.verificationLevel}</p>
           </div>
         </div>
 
-        {record.gpsCoordinates && (
+        {record.clockInVerification?.latitude != null && record.clockInVerification?.longitude != null && (
           <div className="pt-6 border-t">
             <h3 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
               {/* @ts-ignore */}
@@ -95,11 +95,11 @@ export const EVVRecordDetail: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <span className="text-sm text-gray-500">Latitude:</span>
-                <p className="font-mono">{record.gpsCoordinates.latitude}</p>
+                <p className="font-mono">{record.clockInVerification.latitude}</p>
               </div>
               <div>
                 <span className="text-sm text-gray-500">Longitude:</span>
-                <p className="font-mono">{record.gpsCoordinates.longitude}</p>
+                <p className="font-mono">{record.clockInVerification.longitude}</p>
               </div>
             </div>
           </div>

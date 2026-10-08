@@ -25,7 +25,7 @@ export const PayStubDetail: React.FC = () => {
     return (
       <ErrorMessage
         message="Failed to load pay stub"
-        retry={() => navigate('/payroll/stubs')}
+        retry={() => navigate('/payroll/pay-stubs')}
       />
     );
   }
@@ -46,7 +46,7 @@ export const PayStubDetail: React.FC = () => {
         <div className="flex items-center gap-4">
           <Button
             variant="outline"
-            onClick={() => navigate('/payroll/stubs')}
+            onClick={() => navigate('/payroll/pay-stubs')}
             leftIcon={<ArrowLeft className="h-4 w-4" />}
           >
             Back

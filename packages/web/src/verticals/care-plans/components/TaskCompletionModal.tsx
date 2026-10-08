@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import toast from 'react-hot-toast';
 import { X, CheckCircle, Camera, MapPin, Clock } from 'lucide-react';
 import { Button, Card, CardHeader, CardContent, FormField, LoadingSpinner } from '@/core/components';
 import { formatDate, formatTime } from '@/core/utils';
+import { useAuth } from '@/core/hooks';
 import { useCompleteTask } from '../hooks';
+import { SignaturePad } from './SignaturePad';
 import type { TaskInstance, CompleteTaskInput } from '../types';
 
 export interface TaskCompletionModalProps {
@@ -18,6 +21,7 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
   onClose,
   onComplete,
 }) => {
+  const { user } = useAuth();
   const [completionNote, setCompletionNote] = useState('');
   const [signatureData, setSignatureData] = useState<string>('');
   const [photoData, setPhotoData] = useState<string[]>([]);
@@ -30,8 +34,26 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
     try {
       const input: CompleteTaskInput = {
         completionNote: completionNote || 'Task completed successfully',
+        // NOTE: the backend's CompleteTaskInputSchema/validateTaskCompletion
+        // (verticals/care-plans-tasks/src/validation/care-plan-validator.ts)
+        // require `signature` as a top-level structured object matching
+        // SignatureSchema ({ signatureData, signedBy, signedByName,
+        // signatureType }) — NOT nested inside customFieldValues as a raw
+        // data URL. Sending it under customFieldValues (as this previously
+        // did) means the backend's requiredSignature check never sees it and
+        // always rejects the completion with 400 "Signature is required for
+        // this task", even when the user drew and saved a signature here.
+        ...(task.requiredSignature && signatureData
+          ? {
+              signature: {
+                signatureData,
+                signedBy: user?.id ?? '',
+                signedByName: user?.name ?? 'Unknown',
+                signatureType: 'ELECTRONIC' as const,
+              },
+            }
+          : {}),
         customFieldValues: {
-          signature: signatureData,
           photos: photoData,
           observations,
           gpsLocation,
@@ -41,8 +63,10 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
       await completeTask.mutateAsync({ id: task.id, input });
       onComplete?.();
       onClose();
-    } catch {
-      // Error is handled by the mutation
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to complete task'
+      );
     }
   };
 
@@ -53,17 +77,7 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
     // 2. Web camera API integration via getUserMedia()
     // 3. Image compression and base64 encoding
     // 4. EXIF metadata extraction for GPS/timestamp
-    alert('📷 Photo capture is coming soon.\n\nWe are building camera integration for mobile and web.');
-  };
-
-  const handleSignatureCapture = () => {
-    // FEATURE COMING SOON: Signature canvas integration pending
-    // Currently deferred pending:
-    // 1. react-signature-canvas library integration
-    // 2. Signature validation (stroke count, area)
-    // 3. Timestamp and caregiver binding
-    // 4. Ink pressure sensitivity (stylus support)
-    alert('✍️ Signature capture is coming soon.\n\nWe are building signature canvas integration with stroke validation.');
+    toast('📷 Photo capture is coming soon. We are building camera integration for mobile and web.');
   };
 
   const requestGPSLocation = () => {
@@ -155,17 +169,7 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
                       </Button>
                     </div>
                   ) : (
-                    <div className="border-2 border-dashed border-gray-300 rounded-md p-8 text-center">
-                      <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600 mb-4">Client signature required</p>
-                      <Button 
-                        onClick={handleSignatureCapture}
-                        disabled
-                        title="Signature capture coming soon"
-                      >
-                        🔄 Signature Capture (Coming Soon)
-                      </Button>
-                    </div>
+                    <SignaturePad onCapture={(dataUrl) => setSignatureData(dataUrl)} />
                   )}
                 </div>
               </CardContent>

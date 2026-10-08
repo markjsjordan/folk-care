@@ -184,6 +184,7 @@ export const CaregiverTasksPage: React.FC = () => {
                     task={task}
                     showCompleteButton={true}
                     onCompleted={refetch}
+                    onRequireSignature={setSelectedTask}
                   />
                 ))}
               </div>
@@ -201,6 +202,7 @@ export const CaregiverTasksPage: React.FC = () => {
                     task={task}
                     showCompleteButton={true}
                     onCompleted={refetch}
+                    onRequireSignature={setSelectedTask}
                   />
                 ))}
               </div>

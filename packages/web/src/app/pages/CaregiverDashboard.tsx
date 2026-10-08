@@ -631,8 +631,11 @@ export const CaregiverDashboard: React.FC = () => {
   }, [navigate]);
 
   const handleNavigateToTraining = useCallback(() => {
-    navigate('/training');
-  }, [navigate]);
+    if (user?.id) {
+      navigate(`/caregivers/${user.id}/training`);
+    }
+    // else: no user id available yet -- button left as a no-op until auth resolves
+  }, [navigate, user?.id]);
 
   // Initial data load
   useEffect(() => {
@@ -844,7 +847,7 @@ export const CaregiverDashboard: React.FC = () => {
                 onNavigate={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(visit.address)}`, '_blank', 'noopener,noreferrer')}
                 onCheckIn={async () => handleCheckIn(index)}
                 onCheckOut={async () => handleCheckOut(index)}
-                onViewDetails={() => { navigate(`/visits/visit-${index + 1}`); }}
+                onViewDetails={() => { navigate('/scheduling/calendar'); }}
                 onCall={visit.clientPhone ? () => { window.location.href = `tel:${visit.clientPhone ?? ''}`; } : undefined}
               />
             ))

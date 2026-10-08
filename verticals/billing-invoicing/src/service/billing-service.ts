@@ -18,13 +18,25 @@ import {
   Invoice,
   Payment,
   InvoiceLineItem,
-} from '../types/billing';
+  EVVVisitVerificationInput,
+  GenerateInvoicesForVerifiedVisitsInput,
+  GenerateInvoicesBatchResult,
+  CMS1500ClaimForm,
+  PayerType,
+  PayorTypeFilter,
+  InvoiceStatus,
+  ClaimsQueueItem,
+  ClaimsQueueResult,
+  ClaimStatus,
+} from '../types/billing.js';
+import { EVVBillingGateService } from './evv-billing-gate-service.js';
+import { EVVEvidenceRepository, BillableItemEvidence } from '../repository/evv-evidence-repository.js';
 import {
   validateCreateBillableItem,
   validateCreateInvoice,
   validateCreatePayment,
   validateAllocatePayment,
-} from '../validation/billing-validator';
+} from '../validation/billing-validator.js';
 import {
   calculateUnits,
   calculateBaseAmount,
@@ -33,13 +45,21 @@ import {
   generateInvoiceNumber,
   generatePaymentNumber,
   calculateDueDate,
-} from '../utils/billing-calculations';
+} from '../utils/billing-calculations.js';
 
 export class BillingService {
   private repository: BillingRepository;
+  private evvGateService: EVVBillingGateService;
+  private evidenceRepository: EVVEvidenceRepository;
 
   constructor(private pool: Pool) {
     this.repository = new BillingRepository(pool);
+    this.evvGateService = new EVVBillingGateService();
+    this.evidenceRepository = new EVVEvidenceRepository(pool);
+  }
+
+  getEVVGateService(): EVVBillingGateService {
+    return this.evvGateService;
   }
 
   /**
@@ -304,6 +324,12 @@ export class BillingService {
       };
 
       const created = await this.repository.createInvoice(invoice, client);
+      await this.repository.linkBillableItemsToInvoice(
+        items.map((item) => item.id),
+        created.id,
+        input.invoiceDate,
+        client
+      );
 
       // Update billable items to INVOICED status
       for (const item of items) {
@@ -331,6 +357,343 @@ export class BillingService {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Update invoice fields; only allowed while invoice is editable.
+   */
+  async updateInvoice(id: UUID, input: Partial<Invoice>, userId: UUID): Promise<Invoice> {
+    const invoice = await this.repository.findInvoiceById(id);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+
+    if (invoice.status !== 'DRAFT' && invoice.status !== 'PENDING_REVIEW') {
+      throw new Error(`Cannot edit invoice in ${invoice.status} status`);
+    }
+
+    // Submission statuses are reachable only through transitionInvoiceToReadyToSubmit
+    // and sendInvoice, which enforce the EVV gate.
+    if (input.status !== undefined && input.status !== invoice.status && !EDITABLE_TARGET_STATUSES.has(input.status)) {
+      throw new Error(`Cannot change invoice status to ${input.status} by editing; use the submission workflow`);
+    }
+
+    return this.repository.updateInvoice(id, input, userId);
+  }
+
+  /**
+   * Soft-delete an invoice; only allowed while still a draft.
+   */
+  async deleteInvoice(id: UUID, userId: UUID): Promise<void> {
+    const invoice = await this.repository.findInvoiceById(id);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+
+    if (invoice.status !== 'DRAFT') {
+      throw new Error(`Cannot delete invoice in ${invoice.status} status`);
+    }
+
+    await this.repository.deleteInvoice(id, userId);
+  }
+
+  /**
+   * Transition invoice to READY_TO_SUBMIT after the EVV-before-billing gate.
+   * Evidence is loaded from evv_records for every line item; callers cannot supply it.
+   * Mandated by 21st Century Cures Act § 12006 for Medicaid home care billing.
+   */
+  async transitionInvoiceToReadyToSubmit(id: UUID, userId: UUID): Promise<Invoice> {
+    const invoice = await this.repository.findInvoiceById(id);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+
+    if (invoice.status !== 'DRAFT' && invoice.status !== 'PENDING_REVIEW' && invoice.status !== 'APPROVED') {
+      throw new Error(`Cannot transition invoice in ${invoice.status} status to READY_TO_SUBMIT`);
+    }
+
+    const visits = await this.loadInvoiceEvidence(invoice);
+    this.evvGateService.assertCanTransitionToReadyToSubmit(invoice, visits);
+
+    return this.repository.updateInvoice(
+      id,
+      {
+        status: 'READY_TO_SUBMIT',
+        statusHistory: [
+          ...invoice.statusHistory,
+          {
+            id: uuid(),
+            fromStatus: invoice.status,
+            toStatus: 'READY_TO_SUBMIT',
+            timestamp: new Date(),
+            changedBy: userId,
+            reason: `EVV verified for ${visits.length} visit(s) per 21st Century Cures Act § 12006`,
+          },
+        ],
+      },
+      userId
+    );
+  }
+
+  /**
+   * Batch action: invoice every READY billable item whose EVV record passes the gate.
+   * Items lacking EVV evidence, geofence confirmation, or Cures Act data points are
+   * left uninvoiced and reported back as blocked.
+   */
+  async generateInvoicesForVerifiedVisits(
+    input: GenerateInvoicesForVerifiedVisitsInput,
+    userId: UUID,
+    orgCode: string
+  ): Promise<GenerateInvoicesBatchResult> {
+    let candidates = await this.evidenceRepository.findReadyUninvoiced(input.organizationId, input.payerId);
+    if (input.branchId) {
+      candidates = candidates.filter((c) => c.branchId === input.branchId);
+    }
+    if (input.billableItemIds && input.billableItemIds.length > 0) {
+      const wanted = new Set(input.billableItemIds);
+      candidates = candidates.filter((c) => wanted.has(c.billableItemId));
+    }
+
+    const verified: BillableItemEvidence[] = [];
+    const blockedVisits: GenerateInvoicesBatchResult['blockedVisits'] = [];
+    for (const candidate of candidates) {
+      const result = this.evvGateService.validateVisitEVV(candidate.evv);
+      if (result.isValid) {
+        verified.push(candidate);
+      } else {
+        blockedVisits.push({
+          visitId: candidate.evv.visitId,
+          clientName: candidate.evv.clientName || 'Unknown',
+          reasons: candidate.hasEvvRecord ? result.errors : ['No EVV record found for this visit.', ...result.errors],
+          missingElements: result.missingElements,
+        });
+      }
+    }
+
+    // One invoice per payer per branch: the invoice belongs to the branch that delivered the care.
+    const groups = new Map<string, BillableItemEvidence[]>();
+    for (const item of verified) {
+      const key = `${item.payerId}:${item.branchId}`;
+      const group = groups.get(key) ?? [];
+      group.push(item);
+      groups.set(key, group);
+    }
+
+    const generatedInvoices: Invoice[] = [];
+    const today = new Date();
+    for (const items of groups.values()) {
+      const first = items[0]!;
+      const serviceTimes = items.map((i) => new Date(i.serviceDate).getTime());
+      const draft = await this.createInvoice(
+        {
+          organizationId: input.organizationId,
+          branchId: first.branchId,
+          invoiceType: 'STANDARD',
+          payerId: first.payerId,
+          payerType: first.payerType,
+          payerName: first.payerName,
+          periodStart: input.periodStart ?? new Date(Math.min(...serviceTimes)),
+          periodEnd: input.periodEnd ?? new Date(Math.max(...serviceTimes)),
+          invoiceDate: today,
+          dueDate: today,
+          billableItemIds: items.map((i) => i.billableItemId),
+        },
+        userId,
+        orgCode
+      );
+      // Re-runs the gate against the stored evidence before marking ready.
+      generatedInvoices.push(await this.transitionInvoiceToReadyToSubmit(draft.id, userId));
+    }
+
+    return {
+      generatedInvoices,
+      verifiedVisitsCount: verified.length,
+      blockedVisitsCount: blockedVisits.length,
+      blockedVisits,
+    };
+  }
+
+  /**
+   * Claims queue for the billing dashboard: one row per billable item, with the
+   * EVV gate result computed from the stored EVV record.
+   */
+  async getClaimsQueue(
+    organizationId: UUID,
+    filters: { payor?: PayorTypeFilter; search?: string } = {}
+  ): Promise<ClaimsQueueResult> {
+    const rows = await this.evidenceRepository.findForClaimsQueue(organizationId);
+    const payor = filters.payor ?? 'ALL';
+    const search = (filters.search ?? '').trim().toLowerCase();
+
+    const items: ClaimsQueueItem[] = rows
+      .filter((row) => matchesPayorFilter(row.payerType, payor))
+      .map((row) => {
+        const evvValidation = this.evvGateService.validateVisitEVV(row.evv);
+        if (!row.hasEvvRecord) {
+          evvValidation.errors.unshift('No EVV record found for this visit.');
+        }
+        return {
+          id: row.billableItemId,
+          claimNumber: row.invoiceNumber ? `${row.invoiceNumber}-${row.billableItemId.slice(0, 4).toUpperCase()}` : `BI-${row.billableItemId.slice(0, 8).toUpperCase()}`,
+          ...(row.invoiceId ? { invoiceId: row.invoiceId, invoiceNumber: row.invoiceNumber } : {}),
+          clientId: row.evv.clientId,
+          clientName: row.evv.clientName,
+          ...(row.evv.clientMedicaidId ? { clientMedicaidId: row.evv.clientMedicaidId } : {}),
+          caregiverId: row.evv.caregiverId,
+          caregiverName: row.evv.caregiverName,
+          serviceDate: new Date(row.serviceDate).toISOString(),
+          serviceCode: row.serviceTypeCode,
+          serviceDescription: row.serviceTypeName,
+          units: row.units,
+          unitType: row.unitType,
+          unitRate: row.unitRate,
+          totalAmount: row.finalAmount,
+          payorType: row.payerType,
+          payorName: row.payerName,
+          status: deriveClaimStatus(row, evvValidation.isValid),
+          evvValidation,
+          ...(row.denialReason ? { rejectionReason: row.denialReason } : {}),
+          createdAt: new Date(row.createdAt).toISOString(),
+          updatedAt: new Date(row.updatedAt).toISOString(),
+        };
+      })
+      .filter((item) =>
+        search === ''
+          ? true
+          : [item.clientName, item.caregiverName, item.claimNumber, item.payorName, item.serviceCode]
+              .some((field) => field.toLowerCase().includes(search))
+      );
+
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+    const billedThisMonth = (item: ClaimsQueueItem): boolean => {
+      if (item.status !== 'BILLED' && item.status !== 'PAID') return false;
+      const row = rows.find((r) => r.billableItemId === item.id);
+      return row?.invoiceDate !== undefined && new Date(row.invoiceDate).getTime() >= monthStart;
+    };
+
+    const sum = (list: ClaimsQueueItem[]): number => list.reduce((total, i) => total + i.totalAmount, 0);
+    const pending = items.filter((i) => i.status === 'EVV_INCOMPLETE');
+    const ready = items.filter((i) => i.status === 'VERIFIED_READY');
+    // Unbilled = not yet submitted to a payer, whether or not it sits on a draft invoice.
+    const unbilled = items.filter((i) => i.status === 'EVV_INCOMPLETE' || i.status === 'VERIFIED_READY');
+    const billed = items.filter(billedThisMonth);
+
+    return {
+      items,
+      total: items.length,
+      summary: {
+        totalUnbilledAmount: sum(unbilled),
+        totalUnbilledCount: unbilled.length,
+        pendingEVVCount: pending.length,
+        pendingEVVAmount: sum(pending),
+        claimsReadyCount: ready.length,
+        claimsReadyAmount: sum(ready),
+        totalBilledMtdAmount: sum(billed),
+        totalBilledMtdCount: billed.length,
+      },
+    };
+  }
+
+  /**
+   * Export an invoice as an 837P preview. Blocked unless every line passes the EVV gate.
+   */
+  async export837PClaim(invoiceId: UUID, organizationId: UUID): Promise<{ invoice: Invoice; content: string }> {
+    const invoice = await this.findInvoiceForOrganization(invoiceId, organizationId);
+    const visits = await this.loadInvoiceEvidence(invoice);
+    return { invoice, content: this.evvGateService.generate837PPreview(invoice, visits) };
+  }
+
+  /**
+   * Export an invoice as CMS-1500 forms (one per patient). Blocked unless every line passes the EVV gate.
+   */
+  async exportCMS1500Claim(invoiceId: UUID, organizationId: UUID): Promise<CMS1500ClaimForm[]> {
+    const invoice = await this.findInvoiceForOrganization(invoiceId, organizationId);
+    const visits = await this.loadInvoiceEvidence(invoice);
+    return this.evvGateService.generateCMS1500Preview(invoice, visits);
+  }
+
+  /**
+   * Export the claims queue to CSV. Rows failing the EVV gate are excluded.
+   */
+  async exportClaimsCSV(
+    organizationId: UUID,
+    filters: { payor?: PayorTypeFilter } = {}
+  ): Promise<{ csv: string; excludedCount: number }> {
+    const queue = await this.getClaimsQueue(organizationId, filters);
+    return this.evvGateService.generateClaimsCSV(queue.items);
+  }
+
+  private async findInvoiceForOrganization(invoiceId: UUID, organizationId: UUID): Promise<Invoice> {
+    const invoice = await this.repository.findInvoiceById(invoiceId);
+    if (invoice?.organizationId !== organizationId) {
+      throw new Error('Invoice not found');
+    }
+    return invoice;
+  }
+
+  /** EVV evidence for each invoice line item, in line-item order. */
+  private async loadInvoiceEvidence(invoice: Invoice): Promise<EVVVisitVerificationInput[]> {
+    const billableItemIds = invoice.lineItems.map((li) => li.billableItemId);
+    const evidence = await this.evidenceRepository.findByBillableItemIds(invoice.organizationId, billableItemIds);
+    const byId = new Map(evidence.map((e) => [e.billableItemId, e.evv]));
+    // A line item whose billable item cannot be found has no evidence at all.
+    return billableItemIds.map(
+      (id) =>
+        byId.get(id) ?? {
+          visitId: id,
+          serviceTypeCode: '',
+          clientId: '',
+          clientName: '',
+          caregiverId: '',
+          caregiverName: '',
+          serviceDate: '',
+          clockInTime: '',
+        }
+    );
+  }
+
+  /**
+   * Send invoice to payer; allowed from DRAFT or READY_TO_SUBMIT.
+   */
+  async sendInvoice(id: UUID, userId: UUID): Promise<Invoice> {
+    const invoice = await this.repository.findInvoiceById(id);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+
+    if (invoice.status !== 'DRAFT' && invoice.status !== 'READY_TO_SUBMIT') {
+      throw new Error(`Cannot send invoice in ${invoice.status} status`);
+    }
+
+    // Medicaid (fee-for-service and MCO) claims may not leave the agency without
+    // EVV, even when sent straight from DRAFT. Re-checked here so an EVV record
+    // voided after READY_TO_SUBMIT still blocks submission.
+    if (EVV_REQUIRED_PAYER_TYPES.has(invoice.payerType)) {
+      const visits = await this.loadInvoiceEvidence(invoice);
+      this.evvGateService.assertCanTransitionToReadyToSubmit(invoice, visits);
+    }
+
+    return this.repository.updateInvoice(
+      id,
+      { status: 'SENT', submittedDate: new Date(), submittedBy: userId },
+      userId
+    );
+  }
+
+  /**
+   * Void an invoice; disallowed once PAID or already VOIDED.
+   */
+  async voidInvoice(id: UUID, userId: UUID): Promise<Invoice> {
+    const invoice = await this.repository.findInvoiceById(id);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+
+    if (invoice.status === 'PAID' || invoice.status === 'VOIDED') {
+      throw new Error(`Cannot void invoice in ${invoice.status} status`);
+    }
+
+    return this.repository.updateInvoice(id, { status: 'VOIDED' }, userId);
   }
 
   /**
@@ -560,4 +923,46 @@ export class BillingService {
     );
     return parseInt(result.rows[0].count);
   }
+}
+
+const EDITABLE_TARGET_STATUSES: ReadonlySet<InvoiceStatus> = new Set<InvoiceStatus>([
+  'DRAFT',
+  'PENDING_REVIEW',
+  'APPROVED',
+  'CANCELLED',
+]);
+
+const EVV_REQUIRED_PAYER_TYPES: ReadonlySet<PayerType> = new Set<PayerType>(['MEDICAID', 'MANAGED_CARE']);
+
+function matchesPayorFilter(payerType: PayerType, filter: PayorTypeFilter): boolean {
+  switch (filter) {
+    case 'MEDICAID_MCO':
+      return payerType === 'MEDICAID' || payerType === 'MANAGED_CARE';
+    case 'MEDICARE':
+      return payerType === 'MEDICARE' || payerType === 'MEDICARE_ADVANTAGE';
+    case 'PRIVATE_PAY':
+      return payerType === 'PRIVATE_PAY';
+    case 'VA':
+      return payerType === 'VETERANS_BENEFITS';
+    default:
+      return true;
+  }
+}
+
+function deriveClaimStatus(row: BillableItemEvidence, evvValid: boolean): ClaimStatus {
+  if (row.isDenied || row.billableItemStatus === 'DENIED' || row.invoiceStatus === 'DISPUTED') {
+    return 'REJECTED';
+  }
+  if (row.invoiceStatus === 'PAID' || row.billableItemStatus === 'PAID') {
+    return 'PAID';
+  }
+  if (
+    row.invoiceStatus === 'SENT' ||
+    row.invoiceStatus === 'SUBMITTED' ||
+    row.invoiceStatus === 'PARTIALLY_PAID' ||
+    row.invoiceStatus === 'PAST_DUE'
+  ) {
+    return 'BILLED';
+  }
+  return evvValid ? 'VERIFIED_READY' : 'EVV_INCOMPLETE';
 }

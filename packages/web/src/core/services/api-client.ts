@@ -40,7 +40,8 @@ class ApiClientImpl implements ApiClient {
 
     // Create request key for deduplication (method + url + body hash)
     const bodyHash = fetchOptions.body ? JSON.stringify(fetchOptions.body).slice(0, 50) : '';
-    const requestKey = `${method}:${url}${bodyHash}`;
+    const responseType = config?.responseType ?? 'json';
+    const requestKey = `${method}:${url}${bodyHash}${responseType === 'json' ? '' : `:${responseType}`}`;
 
     // For GET requests, use deduplication to prevent duplicate concurrent requests
     // For mutations (POST/PUT/PATCH/DELETE), skip deduplication to allow multiple submissions
@@ -102,6 +103,8 @@ class ApiClientImpl implements ApiClient {
                 throw enhancedError;
               }
 
+              if (responseType === 'text') return response.text();
+              if (responseType === 'blob') return response.blob();
               return response.json();
             },
             {

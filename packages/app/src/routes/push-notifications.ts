@@ -4,15 +4,27 @@
  * Endpoints for managing push notification tokens and sending push notifications.
  */
 
-import { Router, type Request, type Response } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
-import { getDatabase } from '@folkcare/core';
-import { requireAuth } from '../middleware/auth-context.js';
+import { getDatabase, AuthMiddleware } from '@folkcare/core';
 
 const router = Router();
 
+// Lazily construct AuthMiddleware on first request so this module can be
+// imported (and the router mounted) before initializeDatabase() runs in
+// server.ts's startup sequence.
+let authMiddleware: AuthMiddleware | undefined;
+function getAuthMiddleware(): AuthMiddleware {
+  if (authMiddleware === undefined) {
+    authMiddleware = new AuthMiddleware(getDatabase());
+  }
+  return authMiddleware;
+}
+
 // Apply authentication to all push notification routes
-router.use(requireAuth);
+router.use((req: Request, res: Response, next: NextFunction) => {
+  void getAuthMiddleware().requireAuth(req, res, next);
+});
 
 // Validation schemas
 const RegisterTokenSchema = z.object({
@@ -33,8 +45,8 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
   try {
     const { deviceToken, deviceType, deviceName } = RegisterTokenSchema.parse(req.body);
 
-    // Get authenticated user ID from session/token
-    const userId = req.userContext?.userId;
+    // Get authenticated user ID from the JWT-verified request (set by AuthMiddleware.requireAuth)
+    const userId = req.user?.userId;
     
     if (userId === undefined || userId.length === 0) {
       res.status(401).json({ error: 'Unauthorized' });
@@ -105,7 +117,7 @@ router.post('/unregister', async (req: Request, res: Response): Promise<void> =>
   try {
     const { deviceToken } = UnregisterTokenSchema.parse(req.body);
 
-    const userId = req.userContext?.userId;
+    const userId = req.user?.userId;
     
     if (userId === undefined || userId === '') {
       res.status(401).json({ error: 'Unauthorized' });
@@ -148,7 +160,7 @@ router.post('/unregister', async (req: Request, res: Response): Promise<void> =>
  */
 router.get('/tokens', async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = req.userContext?.userId;
+    const userId = req.user?.userId;
     
     if (userId === undefined || userId === '') {
       res.status(401).json({ error: 'Unauthorized' });

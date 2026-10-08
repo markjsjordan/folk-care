@@ -6,3 +6,4 @@ export * from './QADashboard';
 export * from './AuditsPage';
 export * from './AuditDetailPage';
 export * from './CorrectiveActionsPage';
+export * from './CreateAuditPage';

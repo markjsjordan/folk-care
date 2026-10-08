@@ -25,7 +25,7 @@ import {
   TimeSheetSearchFilters,
 } from '@folkcare/payroll-processing';
 import { Database } from '@folkcare/core';
-import { requireAuth } from '../middleware/auth-context';
+import { AuthMiddleware } from '@folkcare/core';
 
 /**
  * Create payroll router with all endpoints
@@ -36,9 +36,15 @@ export function createPayrollRouter(db: Database): Router {
   const payrollService = new PayrollService(pool);
   const payStubGenerator = new PayStubGeneratorService();
   const payrollRepository = new PayrollRepository(pool);
+  const authMiddleware = new AuthMiddleware(db);
 
   // Apply authentication to all payroll routes
-  router.use(requireAuth);
+  // SECURITY: Must be the real JWT-verifying AuthMiddleware.requireAuth, not
+  // the mock requireAuth -- payroll previously had ZERO JWT validation
+  // (the mock only checked a client-controllable X-User-Id header), which
+  // combined with handlers reading userId straight from that same spoofable
+  // header made every payroll mutation route trivially exploitable.
+  router.use(authMiddleware.requireAuth);
 
   /**
    * GET /api/payroll/periods
@@ -86,7 +92,7 @@ export function createPayrollRouter(db: Database): Router {
    */
   router.post('/payroll/periods', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.headers['x-user-id'];
+      const userId = req.user?.userId;
       if (typeof userId !== 'string' || userId.length === 0) {
         res.status(401).json({ error: 'User ID required' });
         return;
@@ -132,7 +138,7 @@ export function createPayrollRouter(db: Database): Router {
    */
   router.post('/payroll/periods/:id/open', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.headers['x-user-id'];
+      const userId = req.user?.userId;
       if (typeof userId !== 'string' || userId.length === 0) {
         res.status(401).json({ error: 'User ID required' });
         return;
@@ -158,7 +164,7 @@ export function createPayrollRouter(db: Database): Router {
    */
   router.post('/payroll/periods/:id/lock', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.headers['x-user-id'];
+      const userId = req.user?.userId;
       if (typeof userId !== 'string' || userId.length === 0) {
         res.status(401).json({ error: 'User ID required' });
         return;
@@ -179,12 +185,38 @@ export function createPayrollRouter(db: Database): Router {
   });
 
   /**
+   * POST /api/payroll/periods/:id/unlock
+   * Unlock a pay period, reverting it to OPEN so timesheets can be changed again
+   */
+  router.post('/payroll/periods/:id/unlock', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (typeof userId !== 'string' || userId.length === 0) {
+        res.status(401).json({ error: 'User ID required' });
+        return;
+      }
+
+      const id = req.params.id ?? "";
+      if (id.length === 0) {
+        res.status(400).json({ error: 'Pay period ID required' });
+        return;
+      }
+
+      await payrollService.unlockPayPeriod(id, userId);
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/payroll/timesheets
    * Compile a timesheet from EVV records
    */
   router.post('/payroll/timesheets', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.headers['x-user-id'];
+      const userId = req.user?.userId;
       if (typeof userId !== 'string' || userId.length === 0) {
         res.status(401).json({ error: 'User ID required' });
         return;
@@ -261,7 +293,7 @@ export function createPayrollRouter(db: Database): Router {
    */
   router.post('/payroll/timesheets/:id/approve', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.headers['x-user-id'];
+      const userId = req.user?.userId;
       if (typeof userId !== 'string' || userId.length === 0) {
         res.status(401).json({ error: 'User ID required' });
         return;
@@ -291,7 +323,7 @@ export function createPayrollRouter(db: Database): Router {
    */
   router.post('/payroll/pay-runs', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.headers['x-user-id'];
+      const userId = req.user?.userId;
       if (typeof userId !== 'string' || userId.length === 0) {
         res.status(401).json({ error: 'User ID required' });
         return;
@@ -353,12 +385,38 @@ export function createPayrollRouter(db: Database): Router {
   });
 
   /**
+   * POST /api/payroll/pay-runs/:id/calculate
+   * (Re)calculate pay stubs and aggregate totals for a pay run
+   */
+  router.post('/payroll/pay-runs/:id/calculate', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (typeof userId !== 'string' || userId.length === 0) {
+        res.status(401).json({ error: 'User ID required' });
+        return;
+      }
+
+      const id = req.params.id ?? "";
+      if (id.length === 0) {
+        res.status(400).json({ error: 'Pay run ID required' });
+        return;
+      }
+
+      const payRun = await payrollService.calculatePayRun(id, userId);
+
+      res.json(payRun);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/payroll/pay-runs/:id/approve
    * Approve a pay run for payment processing
    */
   router.post('/payroll/pay-runs/:id/approve', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.headers['x-user-id'];
+      const userId = req.user?.userId;
       if (typeof userId !== 'string' || userId.length === 0) {
         res.status(401).json({ error: 'User ID required' });
         return;
@@ -373,6 +431,32 @@ export function createPayrollRouter(db: Database): Router {
       await payrollService.approvePayRun(id, userId);
 
       res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/payroll/pay-runs/:id/process
+   * Process an approved pay run to its terminal PROCESSED status
+   */
+  router.post('/payroll/pay-runs/:id/process', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (typeof userId !== 'string' || userId.length === 0) {
+        res.status(401).json({ error: 'User ID required' });
+        return;
+      }
+
+      const id = req.params.id ?? "";
+      if (id.length === 0) {
+        res.status(400).json({ error: 'Pay run ID required' });
+        return;
+      }
+
+      const payRun = await payrollService.processPayRun(id, userId);
+
+      res.json(payRun);
     } catch (error) {
       next(error);
     }
@@ -493,6 +577,39 @@ export function createPayrollRouter(db: Database): Router {
       const limitedPayStubs = sortedPayStubs.slice(0, Number(limit));
 
       res.json({ data: limitedPayStubs });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/payroll/summary
+   * Aggregate payroll summary (current period, pending approvals, recent
+   * pay run totals, YTD totals) consumed by PayRunList and PayrollReports.
+   */
+  router.get('/payroll/summary', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { organizationId } = req.query;
+
+      if (organizationId === undefined) {
+        res.status(400).json({ error: 'organizationId is required' });
+        return;
+      }
+
+      const summary = await payrollRepository.getPayrollSummary(String(organizationId));
+
+      res.json({
+        currentPeriod: summary.currentPeriod ?? undefined,
+        upcomingPayDate: summary.currentPeriod?.payDate,
+        totalEmployees: summary.totalCaregivers,
+        totalCaregivers: summary.totalCaregivers,
+        totalHours: summary.totalHours,
+        totalGrossPay: summary.totalGrossPay,
+        totalTaxWithheld: summary.totalTaxWithheld,
+        pendingApprovals: summary.pendingApprovals,
+        recentPayRuns: summary.recentPayRuns,
+        ytdTotals: summary.ytdTotals,
+      });
     } catch (error) {
       next(error);
     }

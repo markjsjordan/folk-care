@@ -536,7 +536,8 @@ function TeamSettings({ organizationId, onSuccess, onError }: TeamSettingsProps)
   const { data: teamMembers, isLoading: isLoadingTeam } = useQuery({
     queryKey: ['teamMembers', organizationId],
     queryFn: async () => {
-      return await apiClient.get<TeamMember[]>(`/api/organizations/${organizationId}/users`);
+      const res = await apiClient.get<TeamMember[] | { data?: TeamMember[] }>(`/api/organizations/${organizationId}/users`);
+      return Array.isArray(res) ? res : (res.data ?? []);
     },
   });
 
@@ -544,7 +545,8 @@ function TeamSettings({ organizationId, onSuccess, onError }: TeamSettingsProps)
   const { data: invitations, isLoading: isLoadingInvitations } = useQuery({
     queryKey: ['invitations', organizationId],
     queryFn: async () => {
-      return await apiClient.get<Invitation[]>(`/api/organizations/${organizationId}/invitations`);
+      const res = await apiClient.get<Invitation[] | { data?: Invitation[] }>(`/api/organizations/${organizationId}/invitations`);
+      return Array.isArray(res) ? res : (res.data ?? []);
     },
   });
 

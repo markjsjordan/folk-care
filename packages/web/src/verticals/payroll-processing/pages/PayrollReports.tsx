@@ -216,7 +216,9 @@ export const PayrollReports: React.FC = () => {
                         size="sm"
                         leftIcon={<Download className="h-4 w-4" />}
                         onClick={() => handleDownloadReport(report.title)}
-                        className="flex-1"
+                        disabled
+                        title="Report generation coming soon"
+                        className="flex-1 opacity-50 cursor-not-allowed"
                       >
                         PDF
                       </Button>
@@ -225,7 +227,9 @@ export const PayrollReports: React.FC = () => {
                         size="sm"
                         leftIcon={<Download className="h-4 w-4" />}
                         onClick={() => handleDownloadReport(report.title)}
-                        className="flex-1"
+                        disabled
+                        title="Report generation coming soon"
+                        className="flex-1 opacity-50 cursor-not-allowed"
                       >
                         CSV
                       </Button>

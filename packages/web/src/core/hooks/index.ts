@@ -7,3 +7,4 @@ export * from './useOnboarding';
 export * from './useCompliance';
 export * from './useDemoData';
 export * from './useDemoMode';
+export * from './useOrganizationStats';

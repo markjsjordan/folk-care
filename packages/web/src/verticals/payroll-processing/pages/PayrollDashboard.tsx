@@ -5,11 +5,13 @@
  * Shows current pay period, recent periods, and quick actions
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../../core/hooks';
 import { PayrollSummaryCard } from '../components/PayrollSummaryCard';
+import { CreatePayPeriodModal } from '../components/CreatePayPeriodModal';
+import { CreatePayRunModal } from '../components/CreatePayRunModal';
 
 interface PayPeriod {
   id: string;
@@ -59,13 +61,15 @@ async function fetchRecentPeriods(organizationId: string, limit: number = 5): Pr
 export const PayrollDashboard: React.FC = () => {
   const { user } = useAuth();
   const organizationId = user?.organizationId || '';
+  const [isCreatePeriodOpen, setIsCreatePeriodOpen] = useState(false);
+  const [isCreateRunOpen, setIsCreateRunOpen] = useState(false);
 
-  const { data: currentPeriod, isLoading: isLoadingCurrent } = useQuery({
+  const { data: currentPeriod, isLoading: isLoadingCurrent, refetch: refetchCurrent } = useQuery({
     queryKey: ['payroll', 'current-period', organizationId],
     queryFn: () => fetchCurrentPeriod(organizationId),
   });
 
-  const { data: recentPeriods = [], isLoading: isLoadingRecent } = useQuery({
+  const { data: recentPeriods = [], isLoading: isLoadingRecent, refetch: refetchRecent } = useQuery({
     queryKey: ['payroll', 'periods', organizationId],
     queryFn: () => fetchRecentPeriods(organizationId, 5),
   });
@@ -75,13 +79,26 @@ export const PayrollDashboard: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Payroll Management</h1>
-        <Link
-          to="/payroll/periods/new"
+        <button
+          onClick={() => setIsCreatePeriodOpen(true)}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           Create New Period
-        </Link>
+        </button>
       </div>
+
+      <CreatePayPeriodModal
+        isOpen={isCreatePeriodOpen}
+        onClose={() => setIsCreatePeriodOpen(false)}
+        onCreated={() => {
+          void refetchCurrent();
+          void refetchRecent();
+        }}
+      />
+      <CreatePayRunModal
+        isOpen={isCreateRunOpen}
+        onClose={() => setIsCreateRunOpen(false)}
+      />
 
       {/* Current Period Section */}
       <section className="mb-8">
@@ -114,12 +131,13 @@ export const PayrollDashboard: React.FC = () => {
             link="/payroll/runs"
             icon="📋"
           />
-          <QuickActionCard
-            title="Run Payroll"
-            description="Process payroll for current period"
-            link="/payroll/runs/new"
-            icon="💰"
-          />
+          <button onClick={() => setIsCreateRunOpen(true)} className="block text-left">
+            <div className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow duration-200">
+              <div className="text-4xl mb-4">💰</div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Run Payroll</h3>
+              <p className="text-sm text-gray-600">Process payroll for current period</p>
+            </div>
+          </button>
           <QuickActionCard
             title="View Reports"
             description="Access payroll reports and analytics"

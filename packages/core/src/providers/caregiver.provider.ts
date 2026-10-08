@@ -35,11 +35,19 @@ export interface Caregiver {
   credentials?: unknown[];
   certifications?: unknown[];
   skills?: string[];
+  training?: unknown[];
 
   // Employment
+  role?: string;
+  employmentType?: string;
+  employmentStatus?: string;
   status: string;
   hireDate?: Date;
   terminationDate?: Date;
+  dateOfBirth?: Date;
+
+  // Emergency contact
+  emergencyContacts?: unknown[];
 
   // Compliance
   backgroundCheck?: Record<string, unknown>;
@@ -127,6 +135,12 @@ export class CaregiverProvider implements ICaregiverProvider {
       credentials: row['credentials'] ? (typeof row['credentials'] === 'string' ? JSON.parse(row['credentials']) : row['credentials']) : [],
       certifications: row['certifications'] ? (typeof row['certifications'] === 'string' ? JSON.parse(row['certifications']) : row['certifications']) : [],
       skills: row['skills'] ? (Array.isArray(row['skills']) ? row['skills'] : (typeof row['skills'] === 'string' ? JSON.parse(row['skills']) : [])) : [],
+      training: row['training'] ? (typeof row['training'] === 'string' ? JSON.parse(row['training']) : row['training']) : [],
+      role: row['role'] as string | undefined,
+      employmentType: row['employment_type'] as string | undefined,
+      employmentStatus: row['employment_status'] as string | undefined,
+      dateOfBirth: row['date_of_birth'] ? new Date(row['date_of_birth'] as string) : undefined,
+      emergencyContacts: row['emergency_contacts'] ? (typeof row['emergency_contacts'] === 'string' ? JSON.parse(row['emergency_contacts']) : row['emergency_contacts']) : [],
       status: row['status'] as string,
       hireDate: row['hire_date'] ? new Date(row['hire_date'] as string) : undefined,
       terminationDate: row['termination_date'] ? new Date(row['termination_date'] as string) : undefined,
@@ -143,6 +157,8 @@ export class CaregiverProvider implements ICaregiverProvider {
       SELECT
         id, organization_id, branch_ids, primary_branch_id,
         employee_number, first_name, middle_name, last_name, preferred_name,
+        date_of_birth, role, employment_type, employment_status,
+        emergency_contacts, training,
         primary_phone, email,
         credentials, certifications, skills,
         status, hire_date, termination_date,
@@ -170,6 +186,8 @@ export class CaregiverProvider implements ICaregiverProvider {
       SELECT
         id, organization_id, branch_ids, primary_branch_id,
         employee_number, first_name, middle_name, last_name, preferred_name,
+        date_of_birth, role, employment_type, employment_status,
+        emergency_contacts, training,
         primary_phone, email,
         credentials, certifications, skills,
         status, hire_date, termination_date,
@@ -192,6 +210,8 @@ export class CaregiverProvider implements ICaregiverProvider {
       SELECT
         id, organization_id, branch_ids, primary_branch_id,
         employee_number, first_name, middle_name, last_name, preferred_name,
+        date_of_birth, role, employment_type, employment_status,
+        emergency_contacts, training,
         primary_phone, email,
         credentials, certifications, skills,
         status, hire_date, termination_date,
@@ -239,6 +259,8 @@ export class CaregiverProvider implements ICaregiverProvider {
       SELECT
         id, organization_id, branch_ids, primary_branch_id,
         employee_number, first_name, middle_name, last_name, preferred_name,
+        date_of_birth, role, employment_type, employment_status,
+        emergency_contacts, training,
         primary_phone, email,
         credentials, certifications, skills,
         status, hire_date, termination_date,
@@ -276,6 +298,8 @@ export class CaregiverProvider implements ICaregiverProvider {
       SELECT
         id, organization_id, branch_ids, primary_branch_id,
         employee_number, first_name, middle_name, last_name, preferred_name,
+        date_of_birth, role, employment_type, employment_status,
+        emergency_contacts, training,
         primary_phone, email,
         credentials, certifications, skills,
         status, hire_date, termination_date,
