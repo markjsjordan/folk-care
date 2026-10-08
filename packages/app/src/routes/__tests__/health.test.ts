@@ -66,6 +66,43 @@ describe('Health Routes', () => {
       );
     });
 
+    it('should return healthy status in serverless environment (VERCEL=1)', async () => {
+      const origVercel = process.env.VERCEL;
+      process.env.VERCEL = '1';
+
+      try {
+        const router = createHealthRouter(mockDb);
+        const healthHandler = router.stack[0]?.route?.stack[0]?.handle;
+
+        if (healthHandler === undefined) {
+          throw new Error('Health handler not found');
+        }
+
+        await healthHandler(
+          mockRequest as Request,
+          mockResponse as Response,
+          vi.fn()
+        );
+
+        expect(jsonMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            status: 'healthy',
+            checks: expect.objectContaining({
+              disk: expect.objectContaining({
+                status: 'ok',
+              }),
+            }),
+          })
+        );
+      } finally {
+        if (origVercel !== undefined) {
+          process.env.VERCEL = origVercel;
+        } else {
+          delete process.env.VERCEL;
+        }
+      }
+    });
+
     it('should return unhealthy status when database connection fails', async () => {
       const dbError = new Error('Connection failed');
       mockDb.query = vi.fn().mockRejectedValue(dbError);

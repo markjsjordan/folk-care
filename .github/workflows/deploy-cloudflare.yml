@@ -6,10 +6,8 @@
 name: Deploy to Cloudflare + Supabase
 
 on:
-  push:
-    branches: [production, preview]
-  pull_request:
-    branches: [production]
+  # Automated triggers disabled: production platform is deployed on Vercel + Neon
+  # Retained workflow_dispatch for manual/alternative testing only
   workflow_dispatch:
     inputs:
       environment:

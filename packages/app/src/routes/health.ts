@@ -17,12 +17,17 @@ const execAsync = promisify(exec);
 
 /**
  * Get disk space information
- * Returns disk usage for the root filesystem
+ * Returns disk usage for the root filesystem (or /tmp in serverless)
  */
 async function getDiskSpace(): Promise<{ used: number; available: number; total: number; percentUsed: number }> {
   try {
+    // In serverless environments (Vercel/Lambda), the root filesystem is read-only container squashfs (100% full).
+    // Ephemeral writable storage is located at /tmp (typically 512MB).
+    const isServerless = process.env.VERCEL === '1' || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+    const targetPath = isServerless ? '/tmp' : '/';
+
     // Use df command to get disk space (works on Linux/macOS)
-    const { stdout } = await execAsync('df -k / | tail -1');
+    const { stdout } = await execAsync(`df -k ${targetPath} | tail -1`);
     const parts = stdout.trim().split(/\s+/);
 
     // df output: Filesystem 1K-blocks Used Available Use% Mounted
@@ -31,14 +36,14 @@ async function getDiskSpace(): Promise<{ used: number; available: number; total:
       return { used: 0, available: 0, total: 0, percentUsed: 0 };
     }
 
-    const total = parseInt(parts[1] ?? '0') * 1024; // Convert KB to bytes
-    const used = parseInt(parts[2] ?? '0') * 1024;
-    const available = parseInt(parts[3] ?? '0') * 1024;
-    const percentUsed = parseInt(parts[4] ?? '0');
+    const total = parseInt(parts[1] ?? '0', 10) * 1024; // Convert KB to bytes
+    const used = parseInt(parts[2] ?? '0', 10) * 1024;
+    const available = parseInt(parts[3] ?? '0', 10) * 1024;
+    const percentUsed = parseInt(parts[4] ?? '0', 10);
 
     return { used, available, total, percentUsed };
   } catch {
-    // Fallback if df command fails (e.g., on Windows)
+    // Fallback if df command fails (e.g., on Windows or restricted serverless)
     return { used: 0, available: 0, total: 0, percentUsed: 0 };
   }
 }
@@ -72,7 +77,10 @@ function getMemoryUsage(): { process: { heapUsed: number; heapTotal: number; ext
 /**
  * Calculate disk status based on usage percentage
  */
-function getDiskStatus(percentUsed: number): 'ok' | 'warning' | 'critical' {
+function getDiskStatus(percentUsed: number, isServerless = false): 'ok' | 'warning' | 'critical' {
+  if (isServerless) {
+    return 'ok';
+  }
   if (percentUsed < 85) {
     return 'ok';
   }
@@ -106,18 +114,25 @@ export function createHealthRouter(db: Database): Router {
         redisStatus.upstash = upstashHealthy ? 'healthy' : 'unhealthy';
       }
 
+      // Check serverless environment
+      const isServerless = process.env.VERCEL === '1' || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+
       // Get resource usage
       const memory = getMemoryUsage();
       const disk = await getDiskSpace();
 
       // Determine overall status
+      const isMemoryHealthy = isServerless
+        ? memory.process.heapUsed < memory.process.heapTotal * 0.95
+        : memory.system.percentUsed < 95;
+
       const isHealthy =
         dbLatency < 1000 && // Database responds within 1s
-        memory.system.percentUsed < 95 && // System memory < 95%
-        disk.percentUsed < 90; // Disk usage < 90%
+        isMemoryHealthy &&
+        (isServerless || disk.percentUsed < 90); // Disk usage < 90% (or serverless)
 
       // Calculate disk status
-      const diskStatus = getDiskStatus(disk.percentUsed);
+      const diskStatus = getDiskStatus(disk.percentUsed, isServerless);
 
       res.json({
         status: isHealthy ? 'healthy' : 'degraded',
