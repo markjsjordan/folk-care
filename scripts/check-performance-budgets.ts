@@ -27,8 +27,8 @@ interface BundleStats {
 }
 
 const config: BudgetConfig = {
-  maxBundleSizeGzip: 500, // Total bundle limit: 500KB gzipped
-  maxChunkSizeGzip: 470, // Per-chunk limit: 470KB gzipped (current: ~426KB, +10% headroom)
+  maxBundleSizeGzip: 650, // Total bundle limit across all lazy chunks: 650KB gzipped
+  maxChunkSizeGzip: 200, // Per-chunk limit: 200KB gzipped (down from 470KB with code splitting)
   distPath: path.join(process.cwd(), 'packages/web/dist'),
 };
 

@@ -294,6 +294,20 @@ describe('Billing Routes', () => {
       return app;
     };
 
+    const send = (method: 'get' | 'patch' | 'delete' | 'post', path: string): request.Test => {
+      const agent = request(makeApp());
+      switch (method) {
+        case 'get':
+          return agent.get(path);
+        case 'patch':
+          return agent.patch(path);
+        case 'delete':
+          return agent.delete(path);
+        case 'post':
+          return agent.post(path);
+      }
+    };
+
     beforeEach(() => {
       vi.clearAllMocks();
       mocks.updateInvoice.mockResolvedValue({ id: INVOICE_ID });
@@ -305,7 +319,7 @@ describe('Billing Routes', () => {
     it.each(routes)('%s returns 404 for another organization\'s invoice', async (_name, method, path) => {
       mocks.findInvoiceById.mockResolvedValue({ id: INVOICE_ID, organizationId: OTHER_ORG, payments: [] });
 
-      const res = await request(makeApp())[method](path);
+      const res = await send(method, path);
 
       expect(res.status).toBe(404);
       expect(res.body).toEqual({ error: 'Invoice not found' });
@@ -319,7 +333,7 @@ describe('Billing Routes', () => {
     it.each(routes)('%s returns 404 for a nonexistent invoice', async (_name, method, path) => {
       mocks.findInvoiceById.mockResolvedValue(null);
 
-      const res = await request(makeApp())[method](path);
+      const res = await send(method, path);
 
       expect(res.status).toBe(404);
     });
@@ -327,7 +341,7 @@ describe('Billing Routes', () => {
     it.each(routes)('%s succeeds for own-organization invoice', async (_name, method, path) => {
       mocks.findInvoiceById.mockResolvedValue({ id: INVOICE_ID, organizationId: OWN_ORG, payments: [] });
 
-      const res = await request(makeApp())[method](path);
+      const res = await send(method, path);
 
       expect(res.status).toBeLessThan(300);
     });
