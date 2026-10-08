@@ -27,12 +27,27 @@ vi.mock('multer', () => {
 // Mock services
 const mockParseFile = vi.fn();
 const mockImport = vi.fn();
+const mockClientValidateAndPreview = vi.fn();
+const mockClientCommitTransaction = vi.fn();
+const mockCaregiverValidateAndPreview = vi.fn();
+const mockCaregiverCommitTransaction = vi.fn();
 
 vi.mock('@folkcare/client-demographics', () => ({
   ClientImportService: vi.fn().mockImplementation(function () {
     return {
       parseFile: mockParseFile,
       import: mockImport,
+      validateAndPreview: mockClientValidateAndPreview,
+      commitTransaction: mockClientCommitTransaction,
+    };
+  }),
+}));
+
+vi.mock('@folkcare/caregiver-staff', () => ({
+  CaregiverImportService: vi.fn().mockImplementation(function () {
+    return {
+      validateAndPreview: mockCaregiverValidateAndPreview,
+      commitTransaction: mockCaregiverCommitTransaction,
     };
   }),
 }));
@@ -84,6 +99,10 @@ describe('Import Routes', () => {
     // Reset mocks
     mockParseFile.mockReset();
     mockImport.mockReset();
+    mockClientValidateAndPreview.mockReset();
+    mockClientCommitTransaction.mockReset();
+    mockCaregiverValidateAndPreview.mockReset();
+    mockCaregiverCommitTransaction.mockReset();
   });
 
   describe('Router Configuration', () => {
@@ -473,6 +492,215 @@ describe('Import Routes', () => {
 
       // Template download doesn't need complex middleware
       expect(route).toBeDefined();
+    });
+  });
+
+  describe('POST /clients/csv - Two-Phase Import', () => {
+    function getClientsCsvHandler() {
+      const route = (router.stack as RouterLayer[]).find(
+        (layer: RouterLayer) => layer.route?.path === '/clients/csv'
+      )!;
+      return route.route.stack[route.route.stack.length - 1].handle;
+    }
+
+    it('Phase 1: should return validation preview with duplicate flags', async () => {
+      mockClientValidateAndPreview.mockResolvedValue({
+        totalRows: 2,
+        validRows: 1,
+        errorRows: 0,
+        warningRows: 0,
+        duplicateRows: 1,
+        rows: [
+          {
+            rowNumber: 1,
+            data: { client_number: 'C001', first_name: 'John', last_name: 'Doe' },
+            isValid: true,
+            errors: [],
+            warnings: [],
+            duplicateMatch: {
+              matchedBy: 'id',
+              existingRecordId: '111',
+              details: 'Matches existing client C001',
+            },
+          },
+          {
+            rowNumber: 2,
+            data: { client_number: 'C002', first_name: 'Jane', last_name: 'Smith' },
+            isValid: true,
+            errors: [],
+            warnings: [],
+          },
+        ],
+        headers: ['client_number', 'first_name', 'last_name'],
+        suggestedMappings: [],
+      });
+
+      const csvContent = 'client_number,first_name,last_name\nC001,John,Doe\nC002,Jane,Smith';
+      const req = {
+        user: {
+          userId: '123e4567-e89b-12d3-a456-426614174000',
+          organizationId: '223e4567-e89b-12d3-a456-426614174000',
+          roles: ['ADMIN'],
+          permissions: ['import:clients'],
+          branchIds: ['branch-1'],
+        },
+        body: {
+          csvContent,
+          previewOnly: true,
+        },
+      } as any;
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis() } as any;
+
+      await callHandler(getClientsCsvHandler(), req, res);
+
+      expect(mockClientValidateAndPreview).toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          totalRows: 2,
+          duplicateRows: 1,
+        })
+      );
+    });
+
+    it('Phase 2: should commit confirmed records in atomic transaction', async () => {
+      mockClientCommitTransaction.mockResolvedValue({
+        success: true,
+        total: 1,
+        imported: 1,
+        updated: 0,
+        skipped: 0,
+        errors: [],
+      });
+
+      const req = {
+        user: {
+          userId: '123e4567-e89b-12d3-a456-426614174000',
+          organizationId: '223e4567-e89b-12d3-a456-426614174000',
+          roles: ['ADMIN'],
+          permissions: ['import:clients'],
+          branchIds: ['branch-1'],
+        },
+        body: {
+          confirm: true,
+          records: [{ client_number: 'C002', first_name: 'Jane', last_name: 'Smith' }],
+        },
+      } as any;
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis() } as any;
+
+      await callHandler(getClientsCsvHandler(), req, res);
+
+      expect(mockClientCommitTransaction).toHaveBeenCalledWith(
+        [{ client_number: 'C002', first_name: 'Jane', last_name: 'Smith' }],
+        expect.objectContaining({
+          organizationId: '223e4567-e89b-12d3-a456-426614174000',
+          userId: '123e4567-e89b-12d3-a456-426614174000',
+        })
+      );
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          imported: 1,
+        })
+      );
+    });
+  });
+
+  describe('POST /caregivers/csv - Two-Phase Import', () => {
+    function getCaregiversCsvHandler() {
+      const route = (router.stack as RouterLayer[]).find(
+        (layer: RouterLayer) => layer.route?.path === '/caregivers/csv'
+      )!;
+      return route.route.stack[route.route.stack.length - 1].handle;
+    }
+
+    it('Phase 1: should return validation preview for caregivers', async () => {
+      mockCaregiverValidateAndPreview.mockResolvedValue({
+        totalRows: 1,
+        validRows: 1,
+        errorRows: 0,
+        warningRows: 0,
+        duplicateRows: 0,
+        rows: [
+          {
+            rowNumber: 1,
+            data: { employee_number: 'E001', first_name: 'Maria', last_name: 'Garcia' },
+            isValid: true,
+            errors: [],
+            warnings: [],
+          },
+        ],
+        headers: ['employee_number', 'first_name', 'last_name'],
+        suggestedMappings: [],
+      });
+
+      const csvContent = 'employee_number,first_name,last_name\nE001,Maria,Garcia';
+      const req = {
+        user: {
+          userId: '123e4567-e89b-12d3-a456-426614174000',
+          organizationId: '223e4567-e89b-12d3-a456-426614174000',
+          roles: ['ADMIN'],
+          permissions: ['import:caregivers'],
+          branchIds: ['branch-1'],
+        },
+        body: {
+          csvContent,
+          previewOnly: true,
+        },
+      } as any;
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis() } as any;
+
+      await callHandler(getCaregiversCsvHandler(), req, res);
+
+      expect(mockCaregiverValidateAndPreview).toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          validRows: 1,
+        })
+      );
+    });
+
+    it('Phase 2: should commit confirmed caregiver records in atomic transaction', async () => {
+      mockCaregiverCommitTransaction.mockResolvedValue({
+        success: true,
+        total: 1,
+        imported: 1,
+        updated: 0,
+        skipped: 0,
+        errors: [],
+      });
+
+      const req = {
+        user: {
+          userId: '123e4567-e89b-12d3-a456-426614174000',
+          organizationId: '223e4567-e89b-12d3-a456-426614174000',
+          roles: ['ADMIN'],
+          permissions: ['import:caregivers'],
+          branchIds: ['branch-1'],
+        },
+        body: {
+          confirm: true,
+          records: [{ employee_number: 'E001', first_name: 'Maria', last_name: 'Garcia' }],
+        },
+      } as any;
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis() } as any;
+
+      await callHandler(getCaregiversCsvHandler(), req, res);
+
+      expect(mockCaregiverCommitTransaction).toHaveBeenCalledWith(
+        [{ employee_number: 'E001', first_name: 'Maria', last_name: 'Garcia' }],
+        expect.objectContaining({
+          organizationId: '223e4567-e89b-12d3-a456-426614174000',
+          userId: '123e4567-e89b-12d3-a456-426614174000',
+        })
+      );
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          imported: 1,
+        })
+      );
     });
   });
 });
