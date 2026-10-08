@@ -51,6 +51,16 @@ async function runMigrations() {
   const db = knex(config);
 
   try {
+    // Normalize migration extensions in knex_migrations if previously recorded with .js
+    const hasMigrationsTable = await db.schema.hasTable('knex_migrations');
+    if (hasMigrationsTable) {
+      await db.raw(`
+        UPDATE knex_migrations 
+        SET name = regexp_replace(name, '\\.js$', '.ts') 
+        WHERE name LIKE '%.js';
+      `);
+    }
+
     // Run migrations
     const [batchNo, migrations] = await db.migrate.latest();
 
