@@ -79,6 +79,8 @@ function createCarePlanRouter(handlers: ReturnType<typeof createCarePlanHandlers
   router.delete('/care-plans/:id', handlers.deleteCarePlan);
   router.post('/care-plans/:id/activate', handlers.activateCarePlan);
   router.get('/care-plans/expiring', handlers.getExpiringCarePlans);
+  router.post('/care-plans/:id/version', handlers.createCarePlanVersion);
+  router.get('/care-plans/:id/versions', handlers.getCarePlanVersions);
 
   // Client-specific care plan endpoints
   router.get('/clients/:clientId/care-plans', handlers.getCarePlansByClientId);

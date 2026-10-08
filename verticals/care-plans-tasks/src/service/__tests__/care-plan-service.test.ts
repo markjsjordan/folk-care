@@ -225,7 +225,8 @@ describe('CarePlanService', () => {
           ...validInput,
           planNumber: expect.any(String),
           createdBy: mockContext.userId,
-        })
+        }),
+        undefined
       );
       expect(result).toEqual(expectedCarePlan);
     });
@@ -374,7 +375,8 @@ describe('CarePlanService', () => {
       expect(mockRepository.updateCarePlan).toHaveBeenCalledWith(
         carePlanId,
         updateInput,
-        mockContext.userId
+        mockContext.userId,
+        undefined
       );
       expect(result).toEqual(updatedCarePlan);
     });

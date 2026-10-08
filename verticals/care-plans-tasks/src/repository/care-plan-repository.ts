@@ -18,10 +18,15 @@ import {
   CreateProgressNoteInput,
   TaskStatus,
 } from '../types/care-plan';
+import type { Queryable } from '../types/care-plan-versioning.js';
 
 export class CarePlanRepository extends Repository<CarePlan> {
   constructor(database: Database) {
     super({ tableName: 'care_plans', database, enableAudit: true, enableSoftDelete: true });
+  }
+
+  public getDatabase(): Database {
+    return this.database;
   }
 
   // satisfy abstract methods (delegate / stub)
@@ -39,6 +44,7 @@ export class CarePlanRepository extends Repository<CarePlan> {
     if (entity.id !== undefined) row.id = entity.id;
     if (entity.planNumber !== undefined) row.plan_number = entity.planNumber;
     if (entity.name !== undefined) row.name = entity.name;
+    if (entity.currentVersion !== undefined) row.current_version = entity.currentVersion;
     if (entity.clientId !== undefined) row.client_id = entity.clientId;
     if (entity.organizationId !== undefined) row.organization_id = entity.organizationId;
     if (entity.branchId !== undefined) row.branch_id = entity.branchId;
@@ -109,7 +115,8 @@ export class CarePlanRepository extends Repository<CarePlan> {
       status?: string;
       planReviewIntervalDays?: number;
       nextReviewDue?: Date;
-    }
+    },
+    executor: Queryable = this.database
   ): Promise<CarePlan> {
     const query = `
       INSERT INTO care_plans (
@@ -143,7 +150,7 @@ export class CarePlanRepository extends Repository<CarePlan> {
       RETURNING *
     `;
 
-    const result = await this.database.query(query, [
+    const result = await executor.query(query, [
       input.planNumber,
       input.name,
       input.clientId,
@@ -188,7 +195,8 @@ export class CarePlanRepository extends Repository<CarePlan> {
   async updateCarePlan(
     id: UUID,
     input: UpdateCarePlanInput,
-    updatedBy: UUID
+    updatedBy: UUID,
+    executor: Queryable = this.database
   ): Promise<CarePlan> {
     const updates: string[] = [];
     const values: unknown[] = [];
@@ -249,7 +257,53 @@ export class CarePlanRepository extends Repository<CarePlan> {
       RETURNING *
     `;
 
-    const result = await this.database.query(query, values);
+    const result = await executor.query(query, values);
+    if (result.rows.length === 0) {
+      throw new Error('Care plan not found or already deleted');
+    }
+
+    return this.mapRowToCarePlan(result.rows[0]);
+  }
+
+  /**
+   * Update clinical review info and current version on care plan master
+   */
+  async updatePlanVersionAndReview(
+    id: UUID,
+    currentVersion: number,
+    lastReviewedDate: Date,
+    nextReviewDue: Date,
+    updatedBy: UUID,
+    status?: string,
+    executor: Queryable = this.database
+  ): Promise<CarePlan> {
+    const statusUpdate = status ? `, status = $6` : '';
+    const query = `
+      UPDATE care_plans
+      SET current_version = $1,
+          last_reviewed_date = $2,
+          next_review_due = $3,
+          review_date = $3,
+          updated_by = $4,
+          updated_at = NOW(),
+          version = version + 1
+          ${statusUpdate}
+      WHERE id = $5 AND deleted_at IS NULL
+      RETURNING *
+    `;
+
+    const values: unknown[] = [
+      currentVersion,
+      lastReviewedDate,
+      nextReviewDue,
+      updatedBy,
+      id,
+    ];
+    if (status) {
+      values.push(status);
+    }
+
+    const result = await executor.query(query, values);
     if (result.rows.length === 0) {
       throw new Error('Care plan not found or already deleted');
     }
@@ -785,6 +839,7 @@ export class CarePlanRepository extends Repository<CarePlan> {
       id: row.id,
       planNumber: row.plan_number,
       name: row.name,
+      currentVersion: row.current_version ? Number(row.current_version) : 1,
       clientId: row.client_id,
       organizationId: row.organization_id,
       branchId: row.branch_id,

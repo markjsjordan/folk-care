@@ -29,16 +29,50 @@ import { CarePlanValidator } from '../validation/care-plan-validator';
 import { IUserRepository } from '@folkcare/core';
 import { StateComplianceValidator } from '../validation/state-compliance-validator';
 import { StateSpecificCarePlanData } from '../types/state-specific';
+import { CarePlanVersionRepository } from '../repository/care-plan-version-repository.js';
+import {
+  CarePlanVersion,
+  CarePlanVersionDiff,
+  ClinicalReviewInput,
+  Queryable,
+} from '../types/care-plan-versioning.js';
 
 export class CarePlanService {
   private repository: CarePlanRepository;
   private permissions: PermissionService;
   private userRepository: IUserRepository;
+  private versionRepository?: CarePlanVersionRepository;
 
-  constructor(repository: CarePlanRepository, permissions: PermissionService, userRepository: IUserRepository) {
+  constructor(
+    repository: CarePlanRepository,
+    permissions: PermissionService,
+    userRepository: IUserRepository,
+    versionRepository?: CarePlanVersionRepository
+  ) {
     this.repository = repository;
     this.permissions = permissions;
     this.userRepository = userRepository;
+    if (versionRepository) {
+      this.versionRepository = versionRepository;
+    } else if (repository && typeof (repository as any).getDatabase === 'function') {
+      const db = (repository as any).getDatabase();
+      if (db) {
+        this.versionRepository = new CarePlanVersionRepository(db);
+      }
+    }
+  }
+
+  /**
+   * Run `work` in one database transaction so a plan change and its audit
+   * snapshot commit or roll back together. Without a database handle (unit
+   * tests with mocked repositories) it runs without a transaction.
+   */
+  private async inTransaction<T>(work: (executor?: Queryable) => Promise<T>): Promise<T> {
+    const db = this.repository.getDatabase?.();
+    if (db && typeof db.transaction === 'function') {
+      return db.transaction((client) => work(client));
+    }
+    return work();
   }
 
   /**
@@ -89,10 +123,29 @@ export class CarePlanService {
       status: 'DRAFT' as const,
     };
 
-    // Create care plan
-    const carePlan = await this.repository.createCarePlan({
-      ...carePlanData,
-      createdBy: context.userId,
+    // Create the plan and its v1 audit snapshot atomically
+    const carePlan = await this.inTransaction(async (executor) => {
+      const created = await this.repository.createCarePlan(
+        { ...carePlanData, createdBy: context.userId },
+        executor
+      );
+
+      if (this.versionRepository) {
+        await this.versionRepository.createCarePlanVersion(
+          {
+            carePlanId: created.id,
+            versionNumber: 1,
+            status: 'ACTIVE',
+            content: created,
+            effectiveStart: created.effectiveDate,
+            changeReason: 'Initial care plan creation',
+            createdBy: context.userId,
+          },
+          executor
+        );
+      }
+
+      return created;
     });
 
     return carePlan;
@@ -148,11 +201,35 @@ export class CarePlanService {
       throw new PermissionError('Cannot update completed or discontinued care plans');
     }
 
-    const updated = await this.repository.updateCarePlan(
-      id,
-      validatedInput,
-      context.userId
-    );
+    // Apply the change and record version N+1 atomically (immutable audit history)
+    const updated = await this.inTransaction(async (executor) => {
+      const plan = await this.repository.updateCarePlan(id, validatedInput, context.userId, executor);
+
+      if (this.versionRepository) {
+        const latestVersion = await this.versionRepository.getLatestCarePlanVersion(id, executor);
+        const newVersionNumber = (latestVersion?.versionNumber ?? (existing.currentVersion || 1)) + 1;
+        const newVersion = await this.versionRepository.createCarePlanVersion(
+          {
+            carePlanId: id,
+            versionNumber: newVersionNumber,
+            status: ['COMPLETED', 'DISCONTINUED'].includes(plan.status) ? 'ARCHIVED' : 'ACTIVE',
+            content: plan,
+            effectiveStart: new Date(),
+            changeReason: (input as { changeReason?: string }).changeReason || 'Care plan modified',
+            createdBy: context.userId,
+          },
+          executor
+        );
+
+        if (latestVersion) {
+          await this.versionRepository.supersedeVersion(latestVersion.id, newVersion.id, new Date(), executor);
+        }
+
+        plan.currentVersion = newVersionNumber;
+      }
+
+      return plan;
+    });
 
     return updated;
   }
@@ -845,6 +922,238 @@ export class CarePlanService {
 
     // Default to creating the task
     return true;
+  }
+
+  /**
+   * Clone and create version N+1 upon clinical plan review
+   * Texas HHSC (26 TAC §558.287) and Florida AHCA (Chapter 59A-8) compliant
+   */
+  async createPlanReviewVersion(
+    id: UUID,
+    input: ClinicalReviewInput,
+    context: UserContext
+  ): Promise<{ version: CarePlanVersion; carePlan: CarePlan }> {
+    if (!this.permissions.hasPermission(context, 'care-plans:update')) {
+      throw new PermissionError('Insufficient permissions to review and update care plans');
+    }
+
+    const existing = await this.getCarePlanById(id, context);
+    if (!existing) {
+      throw new NotFoundError('Care plan not found', { id });
+    }
+
+    // Determine state jurisdiction and compliance interval
+    const jurisdiction = input.stateJurisdiction || (existing as any).stateJurisdiction;
+    
+    // Review intervals:
+    // Texas HHSC: 60-day review interval requirement (26 TAC §558.287)
+    // Florida AHCA: 60-day for skilled nursing / RN supervisory visits, 90-day for personal care (59A-8.0215)
+    let reviewIntervalDays = 60;
+    if (jurisdiction === 'FL') {
+      const isSkilledOrDelegated =
+        existing.planType === 'SKILLED_NURSING' ||
+        Boolean((existing as any).rnDelegationId) ||
+        existing.interventions?.some((i) =>
+          ['MEDICATION_ADMINISTRATION', 'WOUND_CARE', 'VITAL_SIGNS_MONITORING'].includes(i.category)
+        );
+      reviewIntervalDays = isSkilledOrDelegated ? 60 : 90;
+    }
+
+    const reviewDate = input.reviewDate ? new Date(input.reviewDate) : new Date();
+    const nextReviewDue = addDays(reviewDate, reviewIntervalDays);
+
+    let updatedPlan!: CarePlan;
+
+    // Signature, plan update, snapshot and supersede commit together or not at all
+    const newVersion = await this.inTransaction(async (executor) => {
+      let signatureId: UUID | undefined;
+      if (input.signature && this.versionRepository) {
+        const signature = await this.versionRepository.createSignature(
+          {
+            signerId: input.signature.signerId,
+            signerRole: input.signature.signerRole,
+            signatureSvg: input.signature.signatureSvg,
+            ipAddress: input.signature.ipAddress,
+            signedAt: reviewDate,
+          },
+          executor
+        );
+        signatureId = signature.id;
+      }
+
+      const latestVersion = this.versionRepository
+        ? await this.versionRepository.getLatestCarePlanVersion(id, executor)
+        : null;
+      const newVersionNumber = (latestVersion?.versionNumber ?? (existing.currentVersion || 1)) + 1;
+
+      if (input.contentOverrides && Object.keys(input.contentOverrides).length > 0) {
+        await this.repository.updateCarePlan(
+          id,
+          input.contentOverrides as UpdateCarePlanInput,
+          context.userId,
+          executor
+        );
+      }
+
+      updatedPlan = await this.repository.updatePlanVersionAndReview(
+        id,
+        newVersionNumber,
+        reviewDate,
+        nextReviewDue,
+        context.userId,
+        'ACTIVE',
+        executor
+      );
+
+      if (!this.versionRepository) {
+        return {
+          id,
+          carePlanId: id,
+          versionNumber: newVersionNumber,
+          status: 'ACTIVE' as const,
+          content: updatedPlan,
+          effectiveStart: reviewDate,
+          changeReason: input.changeReason,
+          signatureId,
+          createdAt: new Date(),
+          createdBy: context.userId,
+        };
+      }
+
+      const created = await this.versionRepository.createCarePlanVersion(
+        {
+          carePlanId: id,
+          versionNumber: newVersionNumber,
+          status: 'ACTIVE',
+          content: updatedPlan,
+          effectiveStart: reviewDate,
+          changeReason: input.changeReason,
+          signatureId,
+          createdBy: context.userId,
+        },
+        executor
+      );
+
+      if (latestVersion) {
+        await this.versionRepository.supersedeVersion(latestVersion.id, created.id, reviewDate, executor);
+      }
+
+      return created;
+    });
+
+    return {
+      version: newVersion,
+      carePlan: updatedPlan,
+    };
+  }
+
+  /**
+   * Get version history with diffs between successive versions
+   */
+  async getCarePlanVersionHistory(
+    id: UUID,
+    context: UserContext
+  ): Promise<CarePlanVersion[]> {
+    if (!this.permissions.hasPermission(context, 'care-plans:read')) {
+      throw new PermissionError('Insufficient permissions to read care plans');
+    }
+
+    const carePlan = await this.getCarePlanById(id, context);
+    if (!carePlan) {
+      throw new NotFoundError('Care plan not found', { id });
+    }
+
+    if (!this.versionRepository) {
+      return [];
+    }
+
+    const versions = await this.versionRepository.getCarePlanVersions(id);
+
+    // Compute diffs against previous version
+    for (let i = 0; i < versions.length; i++) {
+      const currentVersion = versions[i];
+      if (!currentVersion) continue;
+      if (i > 0) {
+        const prevVersion = versions[i - 1];
+        if (prevVersion) {
+          currentVersion.diffFromPrevious = this.computeCarePlanDiff(
+            prevVersion.content,
+            currentVersion.content,
+            prevVersion.versionNumber,
+            currentVersion.versionNumber
+          );
+        }
+      } else {
+        currentVersion.diffFromPrevious = null;
+      }
+    }
+
+    return versions;
+  }
+
+  /**
+   * Helper: compute diff between care plan versions for audit inspection
+   */
+  public computeCarePlanDiff(
+    prevContent: Record<string, unknown> | CarePlan,
+    currContent: Record<string, unknown> | CarePlan,
+    prevVersionNumber: number,
+    currVersionNumber: number
+  ): CarePlanVersionDiff {
+    const changedFields: string[] = [];
+    const fieldsToCheck = [
+      'name',
+      'planType',
+      'status',
+      'priority',
+      'effectiveDate',
+      'expirationDate',
+      'reviewDate',
+      'nextReviewDue',
+      'coordinatorId',
+      'goals',
+      'interventions',
+      'taskTemplates',
+      'notes',
+      'serviceFrequency',
+    ];
+
+    const prev = prevContent as Record<string, unknown>;
+    const curr = currContent as Record<string, unknown>;
+
+    for (const field of fieldsToCheck) {
+      if (JSON.stringify(prev[field]) !== JSON.stringify(curr[field])) {
+        changedFields.push(field);
+      }
+    }
+
+    const prevGoals = Array.isArray(prev.goals) ? prev.goals : [];
+    const currGoals = Array.isArray(curr.goals) ? curr.goals : [];
+    const goalsChanged = JSON.stringify(prevGoals) !== JSON.stringify(currGoals);
+
+    const prevInterventions = Array.isArray(prev.interventions) ? prev.interventions : [];
+    const currInterventions = Array.isArray(curr.interventions) ? curr.interventions : [];
+    const interventionsChanged =
+      JSON.stringify(prevInterventions) !== JSON.stringify(currInterventions);
+
+    const prevTasks = Array.isArray(prev.taskTemplates) ? prev.taskTemplates : [];
+    const currTasks = Array.isArray(curr.taskTemplates) ? curr.taskTemplates : [];
+    const tasksChanged = JSON.stringify(prevTasks) !== JSON.stringify(currTasks);
+
+    const summary =
+      changedFields.length === 0
+        ? `Version ${currVersionNumber}: No content modifications`
+        : `Version ${currVersionNumber} updated: ${changedFields.join(', ')}`;
+
+    return {
+      previousVersion: prevVersionNumber,
+      currentVersion: currVersionNumber,
+      changedFields,
+      goalsChanged,
+      interventionsChanged,
+      tasksChanged,
+      summary,
+    };
   }
 }
 

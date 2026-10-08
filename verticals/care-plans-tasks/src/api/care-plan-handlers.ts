@@ -676,6 +676,117 @@ export function createCarePlanHandlers(service: CarePlanService, templateService
         handleError(error, res, 'fetching task metrics');
       }
     },
+
+    /**
+     * @openapi
+     * /api/care-plans/{id}/version:
+     *   post:
+     *     tags:
+     *       - Care Plans
+     *     summary: Create version N+1 upon clinical plan review
+     *     description: Clone and bump care plan version with audit logging, Texas HHSC (60-day) and Florida AHCA (60/90-day) review compliance
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: string
+     *           format: uuid
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - changeReason
+     *             properties:
+     *               changeReason:
+     *                 type: string
+     *               reviewDate:
+     *                 type: string
+     *                 format: date-time
+     *               stateJurisdiction:
+     *                 type: string
+     *                 enum: [TX, FL]
+     *     responses:
+     *       201:
+     *         description: Care plan version created
+     */
+    async createCarePlanVersion(req: Request, res: Response) {
+      try {
+        const context = getUserContext(req);
+        const { id } = req.params;
+        if (!id) {
+          res.status(400).json({ error: 'Care plan ID is required' });
+          return;
+        }
+
+        const { changeReason, reviewDate, signature, contentOverrides, stateJurisdiction } = req.body;
+        if (!changeReason || typeof changeReason !== 'string' || changeReason.trim().length === 0) {
+          res.status(400).json({ error: 'changeReason is required for Medicaid audit compliance' });
+          return;
+        }
+
+        const signaturePayload = signature
+          ? {
+              ...signature,
+              ipAddress: signature.ipAddress || req.ip || undefined,
+            }
+          : undefined;
+
+        const result = await service.createPlanReviewVersion(
+          id,
+          {
+            changeReason: changeReason.trim(),
+            reviewDate: reviewDate ? new Date(reviewDate) : undefined,
+            signature: signaturePayload,
+            contentOverrides,
+            stateJurisdiction,
+          },
+          context
+        );
+
+        res.status(201).json(result);
+      } catch (error: unknown) {
+        handleError(error, res, 'creating care plan version');
+      }
+    },
+
+    /**
+     * @openapi
+     * /api/care-plans/{id}/versions:
+     *   get:
+     *     tags:
+     *       - Care Plans
+     *     summary: Get care plan version history and diffs
+     *     description: Retrieve all historical versions and diffs for Medicaid audits
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: string
+     *           format: uuid
+     *     responses:
+     *       200:
+     *         description: List of care plan versions with diffs
+     */
+    async getCarePlanVersions(req: Request, res: Response) {
+      try {
+        const context = getUserContext(req);
+        const { id } = req.params;
+        if (!id) {
+          res.status(400).json({ error: 'Care plan ID is required' });
+          return;
+        }
+
+        const versions = await service.getCarePlanVersionHistory(id, context);
+        res.json(versions);
+      } catch (error: unknown) {
+        handleError(error, res, 'fetching care plan versions');
+      }
+    },
   };
 }
 
