@@ -305,11 +305,11 @@ export class VisitProvider implements IVisitProvider {
     const query = `
       SELECT 
         id,
-        service_authorization_id,
-        authorized_units,
+        authorization_number,
+        authorization_hours,
         authorization_start_date,
         authorization_end_date,
-        funding_source
+        payer_source
       FROM care_plans
       WHERE client_id = $1 
         AND status = 'ACTIVE'
@@ -328,11 +328,11 @@ export class VisitProvider implements IVisitProvider {
     
     return {
       carePlanId: row.id,
-      authorizationId: row.service_authorization_id,
-      authorizedUnits: row.authorized_units,
+      authorizationId: row.authorization_number,
+      authorizedUnits: row.authorization_hours,
       authorizedStartDate: row.authorization_start_date,
       authorizedEndDate: row.authorization_end_date,
-      fundingSource: row.funding_source,
+      fundingSource: row.payer_source,
       serviceTypeCode: undefined, // Would need to join to service_types or tasks
     };
   }

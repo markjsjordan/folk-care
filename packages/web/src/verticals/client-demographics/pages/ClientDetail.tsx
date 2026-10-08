@@ -216,18 +216,31 @@ export const ClientDetail: React.FC = () => {
                     Report Incident
                   </Button>
                 </Link>
-                <Button variant="outline" size="sm" className="w-full justify-start">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Schedule Visit
-                </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start">
-                  <User className="h-4 w-4 mr-2" />
-                  Assign Caregiver
-                </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start">
-                  <Phone className="h-4 w-4 mr-2" />
-                  Call Client
-                </Button>
+                <Link to={`/scheduling?clientId=${client.id}`} className="block">
+                  <Button variant="outline" size="sm" className="w-full justify-start">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Schedule Visit
+                  </Button>
+                </Link>
+                <Link to={`/scheduling?clientId=${client.id}&assign=true`} className="block">
+                  <Button variant="outline" size="sm" className="w-full justify-start">
+                    <User className="h-4 w-4 mr-2" />
+                    Assign Caregiver
+                  </Button>
+                </Link>
+                {client.primaryPhone?.number ? (
+                  <a href={`tel:${client.primaryPhone.number}`} className="block">
+                    <Button variant="outline" size="sm" className="w-full justify-start">
+                      <Phone className="h-4 w-4 mr-2" />
+                      Call Client ({formatPhone(client.primaryPhone.number)})
+                    </Button>
+                  </a>
+                ) : (
+                  <Button variant="outline" size="sm" className="w-full justify-start" disabled title="No phone number on file">
+                    <Phone className="h-4 w-4 mr-2" />
+                    Call Client (No phone)
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -252,6 +265,17 @@ export const ClientDetail: React.FC = () => {
                       <p className="text-sm font-medium text-gray-900">Intake Completed</p>
                       <p className="text-xs text-gray-600">
                         {formatDate(client.intakeDate)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {client.dischargeDate && (
+                  <div className="flex items-start gap-3">
+                    <div className="h-2 w-2 mt-2 rounded-full bg-red-500" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Discharged</p>
+                      <p className="text-xs text-gray-600">
+                        {formatDate(client.dischargeDate)}
                       </p>
                     </div>
                   </div>

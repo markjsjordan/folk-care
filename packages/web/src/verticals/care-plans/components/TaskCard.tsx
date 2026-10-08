@@ -1,4 +1,5 @@
 import React from 'react';
+import toast from 'react-hot-toast';
 import { CheckCircle, Clock, AlertTriangle, User, Calendar } from 'lucide-react';
 import { Card, StatusBadge, Button } from '@/core/components';
 import { formatDate, formatTime } from '@/core/utils';
@@ -9,24 +10,41 @@ export interface TaskCardProps {
   task: TaskInstance;
   showCompleteButton?: boolean;
   onCompleted?: () => void;
+  // Signature-required tasks must go through TaskCompletionModal (the only
+  // UI that captures a signature). When set, the "Complete Task" button
+  // delegates to this instead of completing the task directly.
+  onRequireSignature?: (task: TaskInstance) => void;
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({ 
   task, 
   showCompleteButton = false,
-  onCompleted 
+  onCompleted,
+  onRequireSignature,
 }) => {
   const completeTask = useCompleteTask();
 
   const handleComplete = async () => {
+    if (task.requiredSignature) {
+      // This task cannot be completed without a signature, which only
+      // TaskCompletionModal can capture. Hand off instead of firing a
+      // doomed direct completion request.
+      onRequireSignature?.(task);
+      return;
+    }
+
     try {
       await completeTask.mutateAsync({ 
         id: task.id, 
         input: { completionNote: 'Task completed via dashboard' } 
       });
       onCompleted?.();
-    } catch {
-      // Error is handled by the mutation
+    } catch (error) {
+      // useCompleteTask's onError already toasts, but guard here too in
+      // case this is ever used without that hook's error handling —
+      // silently swallowing completion failures leaves the caregiver with
+      // zero feedback when the task doesn't actually complete.
+      toast.error(error instanceof Error ? error.message : 'Failed to complete task');
     }
   };
 

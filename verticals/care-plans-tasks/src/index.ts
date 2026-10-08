@@ -6,12 +6,30 @@
 
 // Types
 export * from './types/care-plan';
+export type {
+  TemplateStatus,
+  CarePlanVersionStatus,
+  TemplateFamily,
+  TemplateVersion,
+  DigitalSignature,
+  SignatureEntity,
+  DigitalSignature as VersionSignature,
+  CarePlanVersion,
+  CarePlanVersionDiff,
+  CreateTemplateFamilyInput,
+  CreateTemplateVersionInput,
+  CreateSignatureInput,
+  CreateCarePlanVersionInput,
+  ClinicalReviewInput,
+} from './types/care-plan-versioning.js';
 
 // Validation
 export { CarePlanValidator } from './validation/care-plan-validator';
 
 // Repository
 export { CarePlanRepository } from './repository/care-plan-repository';
+export { CarePlanVersionRepository } from './repository/care-plan-version-repository.js';
+export { TemplateFamilyRepository } from './repository/template-family-repository.js';
 
 // Service
 export { CarePlanService } from './service/care-plan-service';

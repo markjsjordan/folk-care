@@ -260,6 +260,7 @@ export type InvoiceStatus =
   | 'DRAFT' // Being prepared
   | 'PENDING_REVIEW' // Awaiting approval
   | 'APPROVED' // Approved for submission
+  | 'READY_TO_SUBMIT' // EVV-verified and ready for payor submission
   | 'SENT' // Sent to payer
   | 'SUBMITTED' // Claim submitted (insurance)
   | 'PARTIALLY_PAID' // Partial payment received
@@ -280,6 +281,10 @@ export type SubmissionMethod =
 
 export type ClaimStatus =
   | 'PENDING'
+  | 'EVV_INCOMPLETE' // Lacks GPS verification or 6 Cures Act data points
+  | 'VERIFIED_READY' // EVV-verified and ready for submission
+  | 'BILLED' // Claim submitted to payer
+  | 'PAID' // Payment received
   | 'ACCEPTED'
   | 'REJECTED'
   | 'PROCESSING'
@@ -1091,6 +1096,10 @@ export interface InvoiceSearchFilters {
   endDate?: Date;
   isPastDue?: boolean;
   hasBalance?: boolean;
+  /** Max rows to return. Repository clamps to a sane range; see searchInvoices. */
+  limit?: number;
+  /** Rows to skip, for pagination alongside limit. */
+  offset?: number;
 }
 
 export interface PaymentSearchFilters {
@@ -1118,4 +1127,210 @@ export interface ClaimSearchFilters {
   endDate?: Date;
   isDenied?: boolean;
   hasAppeal?: boolean;
+}
+
+/**
+ * 21st Century Cures Act EVV Data Elements and Geofence Verification Types
+ */
+export interface EVVLocationVerificationData {
+  latitude?: number;
+  longitude?: number;
+  accuracyMeters?: number;
+  isWithinGeofence: boolean;
+  timestamp?: Date | string;
+  manualOverride?: {
+    isApproved: boolean;
+    reason: string;
+    reasonCode?: string;
+    approvedBy?: string;
+    approvedAt?: Date | string;
+  };
+}
+
+export interface EVVVisitVerificationInput {
+  visitId: string;
+  // Element 1: Service Type (WHAT)
+  serviceTypeCode: string;
+  serviceTypeName?: string;
+
+  // Element 2: Individual receiving the service (WHO receives)
+  clientId: string;
+  clientName: string;
+  clientMedicaidId?: string;
+
+  // Element 3: Individual providing the service (WHO provides)
+  caregiverId: string;
+  caregiverName: string;
+  caregiverNPI?: string;
+  caregiverEmployeeId?: string;
+
+  // Element 4: Date of service (WHEN date)
+  serviceDate: Date | string;
+
+  // Element 5: Location of service delivery (WHERE)
+  serviceAddress?: {
+    line1?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  serviceLocationLatitude?: number;
+  serviceLocationLongitude?: number;
+
+  // Element 6: Time begins and ends (WHEN time & HOW LONG)
+  clockInTime: Date | string;
+  clockOutTime?: Date | string | null;
+  durationMinutes?: number;
+
+  // GPS / Geofence verification details
+  clockInVerification?: EVVLocationVerificationData;
+  clockOutVerification?: EVVLocationVerificationData;
+
+  // Shortcut flags
+  clockInWithinGeofence?: boolean;
+  clockOutWithinGeofence?: boolean;
+  clockInOverrideReason?: string;
+  clockOutOverrideReason?: string;
+  isClockInOverrideApproved?: boolean;
+  isClockOutOverrideApproved?: boolean;
+
+  // Payer / Billing info
+  payerId?: string;
+  payerName?: string;
+  payerType?: PayerType;
+  rate?: number;
+  unitType?: UnitType;
+  units?: number;
+}
+
+export interface EVVVisitValidationResult {
+  visitId: string;
+  isValid: boolean;
+  complianceStatus: 'VERIFIED_READY' | 'EVV_INCOMPLETE';
+  sixElementsComplete: boolean;
+  geofenceVerified: boolean;
+  missingElements: string[];
+  errors: string[];
+  warnings: string[];
+  details: {
+    serviceTypePresent: boolean;
+    clientPresent: boolean;
+    caregiverPresent: boolean;
+    serviceDatePresent: boolean;
+    serviceLocationPresent: boolean;
+    serviceTimePresent: boolean;
+    clockInGeofencePassed: boolean;
+    clockOutGeofencePassed: boolean;
+    hasApprovedManualOverride: boolean;
+  };
+}
+
+export interface EVVBatchValidationResult {
+  allValid: boolean;
+  totalVisits: number;
+  verifiedCount: number;
+  blockedCount: number;
+  results: EVVVisitValidationResult[];
+}
+
+export type PayorTypeFilter = 'ALL' | 'MEDICAID_MCO' | 'MEDICARE' | 'PRIVATE_PAY' | 'VA';
+
+export interface ClaimsQueueItem {
+  id: string;
+  claimNumber: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  clientId: string;
+  clientName: string;
+  clientMedicaidId?: string;
+  caregiverId: string;
+  caregiverName: string;
+  serviceDate: string;
+  serviceCode: string;
+  serviceDescription: string;
+  units: number;
+  unitType: UnitType;
+  unitRate: number;
+  totalAmount: number;
+  payorType: PayerType;
+  payorName: string;
+  status: ClaimStatus; // EVV_INCOMPLETE | VERIFIED_READY | BILLED | PAID | REJECTED
+  evvValidation: EVVVisitValidationResult;
+  rejectionReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BillingDashboardMetrics {
+  totalUnbilledAmount: number;
+  totalUnbilledCount: number;
+  pendingEVVCount: number;
+  pendingEVVAmount: number;
+  claimsReadyCount: number;
+  claimsReadyAmount: number;
+  totalBilledMtdAmount: number;
+  totalBilledMtdCount: number;
+}
+
+export interface GenerateInvoicesForVerifiedVisitsInput {
+  organizationId: UUID;
+  /** Restrict the batch to one branch; invoices otherwise follow each item's branch. */
+  branchId?: UUID;
+  periodStart?: Date;
+  periodEnd?: Date;
+  payerId?: UUID;
+  /** Restrict the batch to these billable items; defaults to every READY, uninvoiced item. */
+  billableItemIds?: UUID[];
+}
+
+export interface ClaimsQueueResult {
+  items: ClaimsQueueItem[];
+  total: number;
+  summary: BillingDashboardMetrics;
+}
+
+export interface GenerateInvoicesBatchResult {
+  generatedInvoices: Invoice[];
+  verifiedVisitsCount: number;
+  blockedVisitsCount: number;
+  blockedVisits: {
+    visitId: string;
+    clientName: string;
+    reasons: string[];
+    missingElements: string[];
+  }[];
+}
+
+export interface CMS1500ClaimForm {
+  claimNumber: string;
+  box1_payerType: string;
+  box2_patientName: string;
+  box3_patientBirthDate?: string;
+  box4_insuredName?: string;
+  box5_patientAddress?: string;
+  box10_conditionRelatedToEmployment?: boolean;
+  box11_insuredPolicyGroup?: string;
+  box12_patientSignatureOnFile: boolean;
+  box13_insuredSignatureOnFile: boolean;
+  box17_referringProvider?: string;
+  box21_diagnosisCodes: string[];
+  box24_serviceLines: {
+    dateOfServiceFrom: string;
+    dateOfServiceTo: string;
+    placeOfService: string;
+    procedureCode: string;
+    modifiers: string[];
+    diagnosisPointer: string;
+    charges: number;
+    daysOrUnits: number;
+    renderingProviderNpi?: string;
+    evvVerified: boolean;
+  }[];
+  box25_federalTaxId?: string;
+  box28_totalCharge: number;
+  box31_physicianSignature: string;
+  box32_serviceFacilityLocation: string;
+  box33_billingProviderInfo: string;
 }

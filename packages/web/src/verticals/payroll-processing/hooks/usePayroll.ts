@@ -9,6 +9,7 @@ import type {
   PayStubSearchFilters,
   CreatePayRunInput,
   ApprovePayRunInput,
+  CreatePayPeriodInput,
 } from '../types';
 
 export const usePayrollApi = () => {
@@ -79,6 +80,69 @@ export const usePayrollSummary = () => {
   return useQuery({
     queryKey: ['payroll-summary'],
     queryFn: () => payrollApi.getPayrollSummary(),
+  });
+};
+
+export const useCreatePayPeriod = () => {
+  const payrollApi = usePayrollApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreatePayPeriodInput) => payrollApi.createPayPeriod(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pay-periods'] });
+      toast.success('Pay period created successfully');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to create pay period');
+    },
+  });
+};
+
+export const useOpenPayPeriod = () => {
+  const payrollApi = usePayrollApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => payrollApi.openPayPeriod(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pay-periods'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to open pay period');
+    },
+  });
+};
+
+export const useLockPayPeriod = () => {
+  const payrollApi = usePayrollApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => payrollApi.lockPayPeriod(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pay-periods'] });
+      toast.success('Pay period locked');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to lock pay period');
+    },
+  });
+};
+
+export const useUnlockPayPeriod = () => {
+  const payrollApi = usePayrollApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => payrollApi.unlockPayPeriod(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pay-periods'] });
+      toast.success('Pay period unlocked');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to unlock pay period');
+    },
   });
 };
 

@@ -116,7 +116,7 @@ export class TestDatabase {
             SELECT tablename
             FROM pg_tables
             WHERE schemaname = 'public'
-            AND tablename NOT IN ('schema_migrations')
+            AND tablename NOT IN ('schema_migrations', 'knex_migrations', 'knex_migrations_lock')
           ) LOOP
             EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
           END LOOP;

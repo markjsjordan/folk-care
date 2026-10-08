@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useApiClient } from '@/core/hooks';
 import { createEVVApiService } from '../services/evv-api';
-import type { EVVSearchFilters } from '../types';
+import type { EVVSearchFilters, ClockInRequest, ClockOutRequest } from '../types';
 
 export const useEVVApi = () => {
   const apiClient = useApiClient();
@@ -29,18 +29,15 @@ export const useEVVRecord = (id: string | undefined) => {
   });
 };
 
+// Matches the real ClockInInput shape (visitId, caregiverId, location,
+// deviceInfo) — see verticals/time-tracking-evv/src/types/evv.ts and
+// evv-handlers.ts. mutate({ visitId, caregiverId, location, deviceInfo }).
 export const useClockIn = () => {
   const evvApi = useEVVApi();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ visitId, data }: { 
-      visitId: string; 
-      data: { 
-        gpsCoordinates?: { latitude: number; longitude: number }; 
-        verificationMethod: string;
-      } 
-    }) => evvApi.clockIn(visitId, data),
+    mutationFn: (data: ClockInRequest) => evvApi.clockIn(data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['evv-records'] });
       toast.success('Clocked in successfully');
@@ -51,18 +48,18 @@ export const useClockIn = () => {
   });
 };
 
+// Matches the real ClockOutInput shape (visitId, evvRecordId, caregiverId,
+// location, deviceInfo). mutate({ id: evvRecordId, visitId, caregiverId,
+// location, deviceInfo }) — `id` is kept as the mutation-variable name for
+// backwards compatibility with existing call sites, but is mapped onto
+// evvRecordId for the actual request body.
 export const useClockOut = () => {
   const evvApi = useEVVApi();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { 
-      id: string; 
-      data: { 
-        gpsCoordinates?: { latitude: number; longitude: number }; 
-        notes?: string;
-      } 
-    }) => evvApi.clockOut(id, data),
+    mutationFn: ({ id, ...rest }: Omit<ClockOutRequest, 'evvRecordId'> & { id: string }) =>
+      evvApi.clockOut({ ...rest, evvRecordId: id }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['evv-records'] });
       toast.success('Clocked out successfully');

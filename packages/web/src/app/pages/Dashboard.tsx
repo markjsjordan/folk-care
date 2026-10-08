@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth, useDemoData } from '@/core/hooks';
+import { useAuth, useDemoData, useOrganizationStats } from '@/core/hooks';
 import { Card, CardHeader, CardContent, Button, EmptyState, LoadDemoDataCard } from '@/core/components';
 import { Users, Calendar, ClipboardList, AlertCircle, Activity, CalendarPlus } from 'lucide-react';
 
@@ -13,6 +13,13 @@ export const Dashboard: React.FC = () => {
     seedDemoData, 
     isSeeding 
   } = useDemoData();
+  const {
+    activeClients,
+    todayVisits,
+    pendingTasks,
+    alerts,
+    isLoading: isStatsLoading,
+  } = useOrganizationStats();
 
   const handleLoadDemo = () => {
     void seedDemoData();
@@ -58,30 +65,30 @@ export const Dashboard: React.FC = () => {
   const stats = [
     {
       label: 'Active Clients',
-      value: '124',
+      value: isStatsLoading ? '...' : String(activeClients),
       icon: <Users className="h-6 w-6 text-primary-600" />,
-      change: '+12%',
+      change: 'Real-time',
       onClick: () => navigate('/clients'),
     },
     {
       label: "Today's Visits",
-      value: '18',
+      value: isStatsLoading ? '...' : String(todayVisits),
       icon: <Calendar className="h-6 w-6 text-green-600" />,
-      change: '+5%',
+      change: 'Today',
       onClick: () => navigate('/scheduling'),
     },
     {
       label: 'Pending Tasks',
-      value: '7',
+      value: isStatsLoading ? '...' : String(pendingTasks),
       icon: <ClipboardList className="h-6 w-6 text-yellow-600" />,
-      change: '-3%',
+      change: 'Needs review',
       onClick: () => navigate('/tasks'),
     },
     {
       label: 'Alerts',
-      value: '3',
+      value: isStatsLoading ? '...' : String(alerts),
       icon: <AlertCircle className="h-6 w-6 text-red-600" />,
-      change: '+2',
+      change: 'Active',
       onClick: () => navigate('/incidents'),
     },
   ];

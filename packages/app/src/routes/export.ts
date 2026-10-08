@@ -5,17 +5,32 @@
  * including FHIR R4 format for healthcare interoperability.
  */
 
-import { Router, type Router as RouterType, type Request, type Response } from 'express';
-import { DataExportService, FHIRExportService, HL7ExportService } from '@folkcare/core';
-import { requireAuth } from '../middleware/auth-context';
+import { Router, type Router as RouterType, type Request, type Response, type NextFunction } from 'express';
+import { DataExportService, FHIRExportService, HL7ExportService, AuthMiddleware, getDatabase } from '@folkcare/core';
 import { asyncHandler } from '@folkcare/core';
 import { z } from 'zod';
 import type { UUID } from '@folkcare/core';
 
 const router: RouterType = Router();
 
+// Lazily construct AuthMiddleware on first request so this module can be
+// imported (and the router mounted) before initializeDatabase() runs in
+// server.ts's startup sequence.
+let authMiddleware: AuthMiddleware | undefined;
+function getAuthMiddleware(): AuthMiddleware {
+  if (authMiddleware === undefined) {
+    authMiddleware = new AuthMiddleware(getDatabase());
+  }
+  return authMiddleware;
+}
+
 // Apply authentication to all export routes
-router.use(requireAuth);
+// SECURITY: Must be the real JWT-verifying AuthMiddleware.requireAuth, not
+// the mock requireAuth (which trusted spoofable X-User-* headers with zero
+// JWT cross-check and was the root cause of a confirmed live exploit).
+router.use((req: Request, res: Response, next: NextFunction) => {
+  getAuthMiddleware().requireAuth(req, res, next).catch(next);
+});
 
 // Validation schema for export request
 const exportRequestSchema = z.object({

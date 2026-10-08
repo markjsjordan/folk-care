@@ -27,6 +27,49 @@ vi.mock('@folkcare/time-tracking-evv', () => ({
       getEVVRecordById: vi.fn().mockResolvedValue(null),
     };
   }),
+  EVVService: vi.fn().mockImplementation(function () {
+    return {
+      clockIn: vi.fn().mockResolvedValue({}),
+      clockOut: vi.fn().mockResolvedValue({}),
+    };
+  }),
+  EVVHandlers: vi.fn().mockImplementation(function () {
+    return {
+      clockIn: vi.fn().mockResolvedValue({ status: 201, data: {} }),
+      clockOut: vi.fn().mockResolvedValue({ status: 200, data: {} }),
+    };
+  }),
+  IntegrationService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
+  createClientProvider: vi.fn().mockReturnValue({}),
+  createCaregiverProvider: vi.fn().mockReturnValue({}),
+  AggregatorSubmissionRepository: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn().mockResolvedValue({}),
+      findById: vi.fn().mockResolvedValue(null),
+    };
+  }),
+  AggregatorConfigRepository: vi.fn().mockImplementation(function () {
+    return {
+      getConfig: vi.fn().mockResolvedValue(null),
+    };
+  }),
+  EVVAggregatorService: vi.fn().mockImplementation(function () {
+    return {
+      submit: vi.fn().mockResolvedValue({}),
+    };
+  }),
+  AggregatorHandlers: vi.fn().mockImplementation(function () {
+    return {
+      submit: vi.fn().mockResolvedValue({ status: 200, data: {} }),
+    };
+  }),
+}));
+
+// Mock scheduling-visits module (createVisitProvider would otherwise attempt a real DB connection)
+vi.mock('@folkcare/scheduling-visits', () => ({
+  createVisitProvider: vi.fn().mockReturnValue({}),
 }));
 
 // Mock core module
@@ -109,7 +152,7 @@ describe('EVV Routes', () => {
   });
 
   describe('Route Count', () => {
-    it('should have exactly 2 EVV routes configured', () => {
+    it('should have exactly 9 EVV routes configured', () => {
       const routes = router.stack
         .filter((layer: RouterLayer) => layer.route)
         .map((layer: RouterLayer) => ({
@@ -117,10 +160,45 @@ describe('EVV Routes', () => {
           methods: Object.keys(layer.route.methods),
         }));
 
-      // 2 endpoints:
+      // 9 endpoints:
       // GET / - search EVV records
       // GET /:id - get EVV record by ID
-      expect(routes.length).toBe(2);
+      // POST /clock-in - clock in
+      // POST /:id/clock-out - clock out
+      // GET /aggregator/submissions/stats - aggregator submission stats (FC-AUDIT-EVV WU-4)
+      // GET /aggregator/submissions/pending - pending aggregator submissions
+      // POST /aggregator/submissions/retry-all - retry all pending aggregator submissions
+      // POST /aggregator/submissions/:id/retry - retry one aggregator submission
+      // GET /aggregator/submissions/:evvRecordId - submission history for a record
+      expect(routes.length).toBe(9);
+    });
+  });
+
+  describe('Clock In/Out Routes', () => {
+    it('should have POST /clock-in endpoint', () => {
+      const routes = router.stack
+        .filter((layer: RouterLayer) => layer.route)
+        .map((layer: RouterLayer) => ({
+          path: layer.route.path,
+          methods: Object.keys(layer.route.methods),
+        }));
+
+      const clockInRoute = routes.find((r: any) => r.path === '/clock-in');
+      expect(clockInRoute).toBeDefined();
+      expect(clockInRoute?.methods).toContain('post');
+    });
+
+    it('should have POST /:id/clock-out endpoint', () => {
+      const routes = router.stack
+        .filter((layer: RouterLayer) => layer.route)
+        .map((layer: RouterLayer) => ({
+          path: layer.route.path,
+          methods: Object.keys(layer.route.methods),
+        }));
+
+      const clockOutRoute = routes.find((r: any) => r.path === '/:id/clock-out');
+      expect(clockOutRoute).toBeDefined();
+      expect(clockOutRoute?.methods).toContain('post');
     });
   });
 

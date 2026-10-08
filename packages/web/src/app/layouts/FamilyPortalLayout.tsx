@@ -6,7 +6,7 @@
 
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Home, Settings, LogOut, X, Menu } from 'lucide-react';
+import { Home, Settings, LogOut, X, Menu, MessageCircle, Calendar, ClipboardList, Heart, Bell } from 'lucide-react';
 import { useAuth } from '@/core/hooks';
 
 interface NavItem {
@@ -17,6 +17,11 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/family-portal', icon: <Home className="h-5 w-5" /> },
+  { label: 'Messages', path: '/family-portal/messages', icon: <MessageCircle className="h-5 w-5" /> },
+  { label: 'Schedule', path: '/family-portal/schedule', icon: <Calendar className="h-5 w-5" /> },
+  { label: 'Care Plan', path: '/family-portal/care-plan', icon: <ClipboardList className="h-5 w-5" /> },
+  { label: 'Health Updates', path: '/family-portal/health-updates', icon: <Heart className="h-5 w-5" /> },
+  { label: 'Notifications', path: '/family-portal/notifications', icon: <Bell className="h-5 w-5" /> },
 ];
 
 export const FamilyPortalLayout: React.FC = () => {

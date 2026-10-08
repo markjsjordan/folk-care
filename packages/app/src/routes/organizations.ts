@@ -583,6 +583,109 @@ export function createOrganizationRouter(db: Database): Router {
   );
 
   /**
+   * GET /api/organizations/:id/users
+   * List all users/team members for an organization (Settings > Team)
+   */
+  router.get('/organizations/:id/users',
+    authMiddleware.requireAuth,
+    authMiddleware.requireSameOrganization('id'),
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        const organizationId = req.params['id'];
+        if (organizationId === undefined || organizationId.length === 0) {
+          res.status(400).json({
+            success: false,
+            error: 'Organization ID is required',
+          });
+          return;
+        }
+
+        const users = await organizationService.getOrganizationUsers(organizationId);
+        res.json({
+          success: true,
+          data: users,
+        });
+      } catch (error) {
+        console.error('Get organization users error:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to retrieve team members',
+        });
+      }
+    }
+  );
+
+  /**
+   * POST /api/organizations/:id/invitations/:invitationId/resend
+   * Resend an invitation
+   */
+  router.post('/organizations/:id/invitations/:invitationId/resend',
+    authMiddleware.requireAuth,
+    authMiddleware.requireSameOrganization('id'),
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        const organizationId = req.params['id'];
+        const invitationId = req.params['invitationId'];
+        if (organizationId === undefined || organizationId.length === 0 || invitationId === undefined || invitationId.length === 0) {
+          res.status(400).json({
+            success: false,
+            error: 'Organization ID and Invitation ID are required',
+          });
+          return;
+        }
+
+        const userId = req.user?.userId ?? '00000000-0000-0000-0000-000000000000';
+        await organizationService.resendInvitation(invitationId, organizationId, userId);
+        res.json({
+          success: true,
+          message: 'Invitation resent successfully',
+        });
+      } catch (error) {
+        console.error('Resend invitation error:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to resend invitation',
+        });
+      }
+    }
+  );
+
+  /**
+   * DELETE /api/organizations/:id/invitations/:invitationId
+   * Revoke an invitation by ID
+   */
+  router.delete('/organizations/:id/invitations/:invitationId',
+    authMiddleware.requireAuth,
+    authMiddleware.requireSameOrganization('id'),
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        const organizationId = req.params['id'];
+        const invitationId = req.params['invitationId'];
+        if (organizationId === undefined || organizationId.length === 0 || invitationId === undefined || invitationId.length === 0) {
+          res.status(400).json({
+            success: false,
+            error: 'Organization ID and Invitation ID are required',
+          });
+          return;
+        }
+
+        const userId = req.user?.userId ?? '00000000-0000-0000-0000-000000000000';
+        await organizationService.revokeInvitationById(invitationId, organizationId, userId);
+        res.json({
+          success: true,
+          message: 'Invitation revoked successfully',
+        });
+      } catch (error) {
+        console.error('Revoke invitation error:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to revoke invitation',
+        });
+      }
+    }
+  );
+
+  /**
    * GET /api/invitations/:token
    * Get invitation details for validation
    */

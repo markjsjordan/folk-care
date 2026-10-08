@@ -8,6 +8,7 @@
 import type {
   UserContext,
   UUID,
+  PaginatedResult,
 } from '@folkcare/core';
 import { 
   PermissionService,
@@ -234,6 +235,36 @@ export class AuditService {
   }
 
   /**
+   * Get audit summaries with filters and pagination.
+   * Direct data source for GET /api/audits (AuditsPage.tsx). Mirrors the
+   * getFindings/getCorrectiveActions pagination pattern so the handler can
+   * return the same { items, total, page, limit, totalPages } envelope.
+   */
+  async getAuditSummariesPaginated(
+    filters: { status?: string; auditType?: string; branchId?: UUID; page?: number; pageSize?: number },
+    context: UserContext
+  ): Promise<PaginatedResult<AuditSummary>> {
+    // Validate organization context
+    this.validateOrganizationContext(context);
+
+    // Validate permissions
+    if (!this.permissions.hasPermission(context, 'audits:view')) {
+      throw new Error('Insufficient permissions to view audits') as PermissionError;
+    }
+
+    const result = await this.auditRepo.getAuditSummariesPaginated(context.organizationId!, filters);
+    const totalPages = result.limit > 0 ? Math.ceil(result.total / result.limit) : 0;
+
+    return {
+      items: result.items,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      totalPages
+    };
+  }
+
+  /**
    * Calculate compliance score based on findings
    */
   private async calculateComplianceScore(auditId: UUID): Promise<number> {
@@ -400,6 +431,30 @@ export class AuditService {
     }
 
     return await this.findingRepo.getCriticalFindings(context.organizationId!, limit);
+  }
+
+  /**
+   * Get findings with filters (severity, status, category, auditId) and pagination
+   */
+  async getFindings(
+    filters: { severity?: string; status?: string; category?: string; auditId?: string; page?: number; pageSize?: number },
+    context: UserContext
+  ): Promise<PaginatedResult<AuditFinding>> {
+    // Validate permissions
+    if (!this.permissions.hasPermission(context, 'audits:view')) {
+      throw new Error('Insufficient permissions to view findings') as PermissionError;
+    }
+
+    const result = await this.findingRepo.findWithFilters(filters);
+    const totalPages = result.limit > 0 ? Math.ceil(result.total / result.limit) : 0;
+
+    return {
+      items: result.items,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      totalPages
+    };
   }
 
   // ============================================================================
@@ -578,6 +633,31 @@ export class AuditService {
     }
 
     return await this.correctiveActionRepo.getOverdueActions(context.organizationId!, limit);
+  }
+
+  /**
+   * Get corrective actions with filters (status, auditId, findingId, responsiblePersonId) and pagination
+   * Direct data source for CorrectiveActionsPage.tsx.
+   */
+  async getCorrectiveActions(
+    filters: { status?: string; auditId?: string; findingId?: string; responsiblePersonId?: string; page?: number; pageSize?: number },
+    context: UserContext
+  ): Promise<PaginatedResult<CorrectiveAction>> {
+    // Validate permissions
+    if (!this.permissions.hasPermission(context, 'audits:view')) {
+      throw new Error('Insufficient permissions to view corrective actions') as PermissionError;
+    }
+
+    const result = await this.correctiveActionRepo.findAllWithFilters(filters);
+    const totalPages = result.limit > 0 ? Math.ceil(result.total / result.limit) : 0;
+
+    return {
+      items: result.items,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      totalPages
+    };
   }
 
   // ============================================================================

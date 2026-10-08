@@ -272,6 +272,80 @@ export class AuditRepository extends Repository<Audit> {
   }
 
   /**
+   * Get audit summaries with filters and pagination.
+   * Direct data source for GET /api/audits (AuditsPage.tsx), mirroring the
+   * findAllWithFilters/findWithFilters pagination pattern used by
+   * CorrectiveActionRepository and AuditFindingRepository.
+   */
+  async getAuditSummariesPaginated(
+    organizationId: UUID,
+    filters: { status?: string; auditType?: string; branchId?: UUID; page?: number; pageSize?: number }
+  ): Promise<{ items: AuditSummary[]; total: number; page: number; limit: number }> {
+    const page = filters.page && filters.page > 0 ? filters.page : 1;
+    const limit = filters.pageSize && filters.pageSize > 0 ? filters.pageSize : 20;
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = ['organization_id = $1'];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params: any[] = [organizationId];
+    let paramIndex = 2;
+
+    if (filters.status) {
+      conditions.push(`status = $${paramIndex}`);
+      params.push(filters.status);
+      paramIndex++;
+    }
+    if (filters.auditType) {
+      conditions.push(`audit_type = $${paramIndex}`);
+      params.push(filters.auditType);
+      paramIndex++;
+    }
+    if (filters.branchId) {
+      conditions.push(`branch_id = $${paramIndex}`);
+      params.push(filters.branchId);
+      paramIndex++;
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+    const countQuery = `SELECT COUNT(*) as count FROM audits ${whereClause}`;
+    const countResult = await this.database.query(countQuery, params);
+    const total = parseInt((countResult.rows[0]?.count as string) || '0', 10);
+
+    const query = `
+      SELECT
+        id, audit_number, title, audit_type, status, priority,
+        scheduled_start_date, scheduled_end_date, lead_auditor_name,
+        total_findings, critical_findings, compliance_score, overall_rating
+      FROM audits
+      ${whereClause}
+      ORDER BY scheduled_start_date DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    params.push(limit, offset);
+
+    const result = await this.database.query(query, params);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items = result.rows.map((row: any): AuditSummary => ({
+      id: row.id as string,
+      auditNumber: row.audit_number as string,
+      title: row.title as string,
+      auditType: row.audit_type,
+      status: row.status,
+      priority: row.priority,
+      scheduledStartDate: row.scheduled_start_date as Date,
+      scheduledEndDate: row.scheduled_end_date as Date,
+      leadAuditorName: row.lead_auditor_name as string,
+      totalFindings: (row.total_findings || 0) as number,
+      criticalFindings: (row.critical_findings || 0) as number,
+      complianceScore: row.compliance_score as number | undefined,
+      overallRating: row.overall_rating as string | undefined
+    }));
+
+    return { items, total, page, limit };
+  }
+
+  /**
    * Update audit findings count
    */
   async updateFindingsCounts(auditId: UUID): Promise<void> {
@@ -491,6 +565,70 @@ export class AuditFindingRepository extends Repository<AuditFinding> {
     const result = await this.database.query(query, [organizationId, limit]);
     return result.rows.map(row => this.mapRowToEntity(row));
   }
+
+  /**
+   * Find findings with optional filters and pagination
+   */
+  async findWithFilters(filters: {
+    severity?: string;
+    status?: string;
+    category?: string;
+    auditId?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ items: AuditFinding[]; total: number; page: number; limit: number }> {
+    const page = filters.page && filters.page > 0 ? filters.page : 1;
+    const limit = filters.pageSize && filters.pageSize > 0 ? filters.pageSize : 20;
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (filters.severity) {
+      conditions.push(`severity = $${paramIndex}`);
+      params.push(filters.severity);
+      paramIndex++;
+    }
+    if (filters.status) {
+      conditions.push(`status = $${paramIndex}`);
+      params.push(filters.status);
+      paramIndex++;
+    }
+    if (filters.category) {
+      conditions.push(`category = $${paramIndex}`);
+      params.push(filters.category);
+      paramIndex++;
+    }
+    if (filters.auditId) {
+      conditions.push(`audit_id = $${paramIndex}`);
+      params.push(filters.auditId);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const countQuery = `SELECT COUNT(*) as count FROM audit_findings ${whereClause}`;
+    const countResult = await this.database.query(countQuery, params);
+    const total = parseInt((countResult.rows[0]?.count as string) || '0', 10);
+
+    const query = `
+      SELECT * FROM audit_findings
+      ${whereClause}
+      ORDER BY observed_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    params.push(limit, offset);
+
+    const result = await this.database.query(query, params);
+    return {
+      items: result.rows.map(row => this.mapRowToEntity(row)),
+      total,
+      page,
+      limit
+    };
+  }
 }
 
 /**
@@ -686,5 +824,71 @@ export class CorrectiveActionRepository extends Repository<CorrectiveAction> {
 
     const result = await this.database.query(query, [organizationId, limit]);
     return result.rows.map(row => this.mapRowToEntity(row));
+  }
+
+  /**
+   * Find corrective actions with optional filters and pagination.
+   * Extends the base findAll pagination behavior (already used by getAuditDashboard)
+   * with status/auditId/findingId/responsiblePersonId filter support.
+   */
+  async findAllWithFilters(filters: {
+    status?: string;
+    auditId?: string;
+    findingId?: string;
+    responsiblePersonId?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ items: CorrectiveAction[]; total: number; page: number; limit: number }> {
+    const page = filters.page && filters.page > 0 ? filters.page : 1;
+    const limit = filters.pageSize && filters.pageSize > 0 ? filters.pageSize : 20;
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (filters.status) {
+      conditions.push(`status = $${paramIndex}`);
+      params.push(filters.status);
+      paramIndex++;
+    }
+    if (filters.auditId) {
+      conditions.push(`audit_id = $${paramIndex}`);
+      params.push(filters.auditId);
+      paramIndex++;
+    }
+    if (filters.findingId) {
+      conditions.push(`finding_id = $${paramIndex}`);
+      params.push(filters.findingId);
+      paramIndex++;
+    }
+    if (filters.responsiblePersonId) {
+      conditions.push(`responsible_person_id = $${paramIndex}`);
+      params.push(filters.responsiblePersonId);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const countQuery = `SELECT COUNT(*) as count FROM corrective_actions ${whereClause}`;
+    const countResult = await this.database.query(countQuery, params);
+    const total = parseInt((countResult.rows[0]?.count as string) || '0', 10);
+
+    const query = `
+      SELECT * FROM corrective_actions
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    params.push(limit, offset);
+
+    const result = await this.database.query(query, params);
+    return {
+      items: result.rows.map(row => this.mapRowToEntity(row)),
+      total,
+      page,
+      limit
+    };
   }
 }

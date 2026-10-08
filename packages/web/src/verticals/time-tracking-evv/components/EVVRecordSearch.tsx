@@ -30,27 +30,29 @@ export const EVVRecordSearch: React.FC<EVVRecordSearchProps> = ({
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Statuses</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="DISPUTED">Disputed</option>
-            <option value="VERIFIED">Verified</option>
+            <option value="PENDING">Pending</option>
+            <option value="COMPLETE">Complete</option>
+            <option value="SUBMITTED">Submitted</option>
+            <option value="AMENDED">Amended</option>
+            <option value="VOIDED">Voided</option>
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Verification Method
+            Verification Level
           </label>
           <select
-            value={filters.verificationMethod || ''}
-            onChange={(e) => handleFilterChange('verificationMethod', e.target.value)}
+            value={filters.verificationLevel || ''}
+            onChange={(e) => handleFilterChange('verificationLevel', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">All Methods</option>
-            <option value="GPS">GPS</option>
-            <option value="PHONE">Phone</option>
-            <option value="BIOMETRIC">Biometric</option>
+            <option value="">All Levels</option>
+            <option value="FULL">Full</option>
+            <option value="PARTIAL">Partial</option>
             <option value="MANUAL">Manual</option>
+            <option value="PHONE">Phone</option>
+            <option value="EXCEPTION">Exception</option>
           </select>
         </div>
 

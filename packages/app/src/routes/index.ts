@@ -6,12 +6,15 @@
 
 import { Express, Router } from 'express';
 import { Database, PermissionService, UserRepository, AuthMiddleware } from '@folkcare/core';
-import { createClientRouter, ClientService, ClientRepository } from '@folkcare/client-demographics';
+import { createClientRouter, ClientService, ClientRepository, ClientAuditService } from '@folkcare/client-demographics';
 import { CarePlanService, CarePlanRepository } from '@folkcare/care-plans-tasks';
+import { TemplateService } from '@folkcare/care-plans-tasks';
 import { createCarePlanHandlers } from '@folkcare/care-plans-tasks';
 import { createTaskPrioritizationRoutes, createNaturalLanguageCarePlanRoutes, createCarePlanEffectivenessRoutes } from '@folkcare/care-plans-tasks';
 import { createOptimalVisitFrequencyRoutes } from '@folkcare/scheduling-visits';
 import { createTrainingRecommendationRoutes } from '@folkcare/caregiver-staff';
+import { createBurnoutRoutes } from '@folkcare/caregiver-burnout-prediction';
+import { createAIRoutes } from '@folkcare/ai-services';
 import { createHealthRouter } from './health';
 import { createMetricsRouter } from './metrics';
 import { createAuthRouter } from './auth';
@@ -53,6 +56,7 @@ import { createUsageRouter } from './usage.js';
 import { createVerificationRouter } from './verification.js';
 import { createImportRoutes } from './import-routes.js';
 import { createBillingRouter } from './billing.js';
+import { createShiftMatchingRouter } from './shift-matching.js';
 import { createComplianceRouter } from './compliance.js';
 import exportRouter from './export.js';
 import { createAIUsageRouter } from './ai-usage.js';
@@ -75,6 +79,8 @@ function createCarePlanRouter(handlers: ReturnType<typeof createCarePlanHandlers
   router.delete('/care-plans/:id', handlers.deleteCarePlan);
   router.post('/care-plans/:id/activate', handlers.activateCarePlan);
   router.get('/care-plans/expiring', handlers.getExpiringCarePlans);
+  router.post('/care-plans/:id/version', handlers.createCarePlanVersion);
+  router.get('/care-plans/:id/versions', handlers.getCarePlanVersions);
 
   // Client-specific care plan endpoints
   router.get('/clients/:clientId/care-plans', handlers.getCarePlansByClientId);
@@ -82,6 +88,9 @@ function createCarePlanRouter(handlers: ReturnType<typeof createCarePlanHandlers
 
   // Task generation
   router.post('/care-plans/:id/tasks/generate', handlers.createTasksForVisit);
+
+  // Create from template
+  router.post('/care-plans/from-template', handlers.createCarePlanFromTemplate);
 
   // Task endpoints
   router.post('/tasks', handlers.createTaskInstance);
@@ -241,7 +250,14 @@ export async function setupRoutes(app: Express, db: Database): Promise<void> {
 
   // Client Demographics routes
   const clientRepository = new ClientRepository(db);
-  const clientService = new ClientService(clientRepository);
+  // FC-AUDIT-CLIENTS: ClientService was previously constructed with no
+  // ClientAuditService, so getClientById's HIPAA access-audit write was always a
+  // silent no-op in production (the write path checks `if (this.auditService)`).
+  // `db` here already exposes the raw .query(sql, params) method ClientAuditService
+  // needs (same object used directly via db.query(...) elsewhere, e.g.
+  // security-monitoring.service.ts / routes/sync.ts).
+  const clientAuditService = new ClientAuditService(db);
+  const clientService = new ClientService(clientRepository, clientAuditService);
   const clientRouter = createClientRouter(clientService, db);
   app.use('/api', generalApiLimiter, clientRouter);
   console.log('  ✓ Client Demographics routes registered (with rate limiting)');
@@ -251,7 +267,8 @@ export async function setupRoutes(app: Express, db: Database): Promise<void> {
   const permissionService = new PermissionService();
   const userRepository = new UserRepository(db);
   const carePlanService = new CarePlanService(carePlanRepository, permissionService, userRepository);
-  const carePlanHandlers = createCarePlanHandlers(carePlanService);
+  const templateService = new TemplateService(carePlanRepository);
+  const carePlanHandlers = createCarePlanHandlers(carePlanService, templateService);
   const carePlanRouter = createCarePlanRouter(carePlanHandlers, db);
   app.use('/api', generalApiLimiter, carePlanRouter);
   console.log('  ✓ Care Plans & Tasks routes registered (with rate limiting)');
@@ -290,6 +307,11 @@ export async function setupRoutes(app: Express, db: Database): Promise<void> {
   const optimalFrequencyRouter = createOptimalVisitFrequencyRoutes(db);
   app.use('/api', generalApiLimiter, optimalFrequencyRouter);
   console.log('  ✓ Optimal Visit Frequency routes registered (with rate limiting)');
+
+  // Shift Matching & Assignment routes
+  const shiftMatchingRouter = createShiftMatchingRouter(db);
+  app.use('/api/shift-matching', generalApiLimiter, shiftMatchingRouter);
+  console.log('  ✓ Shift Matching & Assignment routes registered (with rate limiting)');
 
   // Demo routes (interactive demo system) - includes EVV clock-in/out
   const demoRouter = createDemoRouter(db);
@@ -359,7 +381,6 @@ export async function setupRoutes(app: Express, db: Database): Promise<void> {
   const authMiddleware2 = new AuthMiddleware(db);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   burnoutRouter.use(authMiddleware2.requireAuth as any);
-  const { createBurnoutRoutes } = await import('@folkcare/caregiver-burnout-prediction');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createBurnoutRoutes(burnoutRouter as any, db);
   app.use('/api', generalApiLimiter, burnoutRouter);
@@ -426,7 +447,6 @@ export async function setupRoutes(app: Express, db: Database): Promise<void> {
   console.log('  ✓ Data Export routes registered (with rate limiting)');
 
   // AI Services routes (note summarization, sentiment analysis)
-  const { createAIRoutes } = await import('@folkcare/ai-services');
   const aiRouter = createAIRoutes(db);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.use('/api', generalApiLimiter, aiRouter as any);

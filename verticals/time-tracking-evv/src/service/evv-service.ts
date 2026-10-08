@@ -437,8 +437,19 @@ export class EVVService {
       throw new ValidationError('Visit has already been clocked out');
     }
 
-    // Get geofence
-    const geofence = await this.repository.getGeofenceByAddress('address-id-123'); // Would get from visit
+    // Get geofence — re-derive the same address/geofence used at clock-in by
+    // re-fetching the visit (EVV records don't persist addressId directly;
+    // clockIn computes it from the visit's service address each time, so
+    // clockOut must do the same lookup rather than a hardcoded placeholder).
+    const visitData = await this.visitProvider.getVisitForEVV(evvRecord.visitId);
+    if (!visitData.serviceAddress.latitude || !visitData.serviceAddress.longitude) {
+      throw new ValidationError(
+        'Visit address must have valid geocoded coordinates for EVV compliance',
+        { visitId: evvRecord.visitId, address: visitData.serviceAddress }
+      );
+    }
+    const addressId = visitData.serviceAddress.addressId || this.generateFallbackAddressId(visitData.serviceAddress);
+    const geofence = await this.repository.getGeofenceByAddress(addressId);
     if (!geofence) {
       throw new NotFoundError('Geofence not found for visit location');
     }

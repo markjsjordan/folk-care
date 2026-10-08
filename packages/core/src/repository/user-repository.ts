@@ -50,6 +50,9 @@ export interface IUserRepository {
   acceptInviteToken(token: string, userId: UUID): Promise<void>;
   revokeInviteToken(token: string, revokedBy: UUID): Promise<void>;
   getOrganizationInvites(organizationId: UUID): Promise<InviteToken[]>;
+  getUsersByOrganization(organizationId: UUID): Promise<User[]>;
+  resendInviteToken(invitationId: UUID, organizationId: UUID, resendBy: UUID): Promise<void>;
+  revokeInviteById(invitationId: UUID, organizationId: UUID, revokedBy: UUID): Promise<void>;
 }
 
 export class UserRepository implements IUserRepository {
@@ -486,5 +489,66 @@ export class UserRepository implements IUserRepository {
       updatedBy: row.updated_by,
       version: 1,
     }));
+  }
+
+  async getUsersByOrganization(organizationId: UUID): Promise<User[]> {
+    const query = `
+      SELECT 
+        id, organization_id, first_name, last_name, email, username,
+        roles, branch_ids, status
+      FROM users
+      WHERE organization_id = $1 AND deleted_at IS NULL
+      ORDER BY created_at DESC
+    `;
+
+    const result = await this.db.query<{
+      id: string;
+      organization_id: string;
+      first_name: string;
+      last_name: string;
+      email: string;
+      username: string;
+      roles: string[];
+      branch_ids: string[];
+      status: string;
+    }>(query, [organizationId]);
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      email: row.email,
+      username: row.username,
+      roles: row.roles as Role[],
+      branchIds: row.branch_ids,
+      status: row.status,
+    }));
+  }
+
+  async resendInviteToken(invitationId: UUID, organizationId: UUID, resendBy: UUID): Promise<void> {
+    const query = `
+      UPDATE invite_tokens
+      SET 
+        expires_at = NOW() + INTERVAL '7 days',
+        updated_at = NOW(),
+        updated_by = $3
+      WHERE id = $1 AND organization_id = $2 AND status = 'PENDING'
+    `;
+
+    await this.db.query(query, [invitationId, organizationId, resendBy]);
+  }
+
+  async revokeInviteById(invitationId: UUID, organizationId: UUID, revokedBy: UUID): Promise<void> {
+    const query = `
+      UPDATE invite_tokens
+      SET 
+        status = 'REVOKED',
+        updated_at = NOW(),
+        updated_by = $3
+      WHERE id = $1 AND organization_id = $2 AND status = 'PENDING'
+    `;
+
+    await this.db.query(query, [invitationId, organizationId, revokedBy]);
   }
 }

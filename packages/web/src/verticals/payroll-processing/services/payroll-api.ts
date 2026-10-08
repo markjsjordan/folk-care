@@ -12,6 +12,7 @@ import type {
   PayStubSearchFilters,
   CreatePayRunInput,
   ApprovePayRunInput,
+  CreatePayPeriodInput,
 } from '../types';
 
 
@@ -19,6 +20,10 @@ import type {
 export interface PayrollApiService {
   getPayPeriods(filters?: PayrollSearchFilters): Promise<PayPeriodListResponse>;
   getPayPeriodById(id: string): Promise<PayPeriod>;
+  createPayPeriod(input: CreatePayPeriodInput): Promise<PayPeriod>;
+  openPayPeriod(id: string): Promise<void>;
+  lockPayPeriod(id: string): Promise<void>;
+  unlockPayPeriod(id: string): Promise<void>;
   getPayRuns(filters?: PayRunSearchFilters): Promise<PayRunListResponse>;
   getPayRunById(id: string): Promise<PayRun>;
   createPayRun(input: CreatePayRunInput): Promise<PayRun>;
@@ -43,11 +48,35 @@ export const createPayrollApiService = (apiClient: ApiClient): PayrollApiService
       if (filters?.endDate) params.append('endDate', filters.endDate);
 
       const url = `/api/payroll/periods${params.toString() ? `?${params.toString()}` : ''}`;
-      return apiClient.get<PayPeriodListResponse>(url);
+      // Backend returns { data: PayPeriod[], meta: { total, limit, offset } },
+      // not the { items, total, hasMore } shape PayPeriodListResponse expects.
+      const response = await apiClient.get<{ data: PayPeriod[]; meta?: { total: number; limit: number; offset: number } }>(url);
+      const items = response.data ?? [];
+      const total = response.meta?.total ?? items.length;
+      const limit = response.meta?.limit ?? items.length;
+      const offset = response.meta?.offset ?? 0;
+      return { items, total, hasMore: offset + items.length < total || items.length >= limit };
     },
 
     getPayPeriodById: async (id: string) => {
       return apiClient.get<PayPeriod>(`/api/payroll/periods/${id}`);
+    },
+
+    createPayPeriod: async (input: CreatePayPeriodInput) => {
+      const response = await apiClient.post<{ data: PayPeriod }>('/api/payroll/periods', input);
+      return response.data;
+    },
+
+    openPayPeriod: async (id: string) => {
+      await apiClient.post<{ success: boolean }>(`/api/payroll/periods/${id}/open`, {});
+    },
+
+    lockPayPeriod: async (id: string) => {
+      await apiClient.post<{ success: boolean }>(`/api/payroll/periods/${id}/lock`, {});
+    },
+
+    unlockPayPeriod: async (id: string) => {
+      await apiClient.post<{ success: boolean }>(`/api/payroll/periods/${id}/unlock`, {});
     },
 
     getPayRuns: async (filters?: PayRunSearchFilters) => {
@@ -59,7 +88,10 @@ export const createPayrollApiService = (apiClient: ApiClient): PayrollApiService
       if (filters?.endDate) params.append('endDate', filters.endDate);
 
       const url = `/api/payroll/pay-runs${params.toString() ? `?${params.toString()}` : ''}`;
-      return apiClient.get<PayRunListResponse>(url);
+      // Backend returns { data: PayRun[] } (no pagination envelope).
+      const response = await apiClient.get<{ data: PayRun[] }>(url);
+      const items = response.data ?? [];
+      return { items, total: items.length, hasMore: false };
     },
 
     getPayRunById: async (id: string) => {
@@ -94,7 +126,10 @@ export const createPayrollApiService = (apiClient: ApiClient): PayrollApiService
       if (filters?.endDate) params.append('endDate', filters.endDate);
 
       const url = `/api/payroll/pay-stubs${params.toString() ? `?${params.toString()}` : ''}`;
-      return apiClient.get<PayStubListResponse>(url);
+      // Backend returns { data: PayStub[] } (no pagination envelope).
+      const response = await apiClient.get<{ data: PayStub[] }>(url);
+      const items = response.data ?? [];
+      return { items, total: items.length, hasMore: false };
     },
 
     getPayStubById: async (id: string) => {

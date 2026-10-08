@@ -333,11 +333,11 @@ export const CarePlanDetail: React.FC = () => {
                     Progress Notes
                   </Button>
                 </Link>
-                <Button variant="outline" size="sm" className="w-full justify-start">
+                <Button variant="outline" size="sm" className="w-full justify-start" disabled title="Coming soon">
                   <User className="h-4 w-4 mr-2" />
                   Assign Caregiver
                 </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start">
+                <Button variant="outline" size="sm" className="w-full justify-start" disabled title="Coming soon">
                   <Calendar className="h-4 w-4 mr-2" />
                   Schedule Review
                 </Button>

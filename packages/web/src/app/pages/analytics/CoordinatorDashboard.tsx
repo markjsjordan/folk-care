@@ -5,6 +5,7 @@
 
 
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
   Users,
@@ -22,10 +23,13 @@ import {
   useComplianceAlerts,
   useEVVExceptions,
 } from '@/verticals/analytics-reporting/hooks/useAnalytics';
+import { useClients } from '@/verticals/client-demographics/hooks/useClients';
 
 const REAL_TIME_REFRESH_INTERVAL = 60000; // 60 seconds
 
 export function CoordinatorDashboard() {
+  const navigate = useNavigate();
+
   // Memoize filter to prevent infinite re-renders
   const todayFilter = useMemo(() => {
     const today = new Date();
@@ -56,6 +60,17 @@ export function CoordinatorDashboard() {
     isLoading: exceptionsLoading,
     error: exceptionsError,
   } = useEVVExceptions(todayFilter, { refetchInterval: REAL_TIME_REFRESH_INTERVAL });
+
+  // Active Clients count comes from the real GET /api/clients endpoint,
+  // filtered to ACTIVE status. pageSize=1 since only the `total` count is
+  // needed here, not the item list. (Ported from the now-deleted orphan
+  // app/pages/CoordinatorDashboard.tsx, which had this working real-data
+  // stat.)
+  const { data: activeClientsResult, isLoading: activeClientsLoading } = useClients({
+    status: ['ACTIVE'],
+    pageSize: 1,
+  });
+  const activeClientsCount = activeClientsResult?.total;
 
   const isLoading = statsLoading ?? alertsLoading ?? exceptionsLoading;
   const error = statsError ?? alertsError ?? exceptionsError;
@@ -93,6 +108,13 @@ export function CoordinatorDashboard() {
         <>
           {/* Today's Overview */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <KPICard
+              title="Active Clients"
+              value={activeClientsLoading || activeClientsCount === undefined ? '—' : activeClientsCount}
+              subtitle="Your caseload"
+              icon={<Users className="h-8 w-8 text-primary-600" />}
+              onClick={() => navigate('/clients')}
+            />
             <KPICard
               title="In Progress"
               value={dashboardStats?.inProgress ?? 0}

@@ -7,7 +7,7 @@
 import type { Request, Response } from 'express';
 import { MedicationService } from '../service/medication-service.js';
 import { MedicationInteractionService } from '../service/medication-interaction-service.js';
-import type { UserContext, Role } from '@folkcare/core';
+import type { UserContext } from '@folkcare/core';
 import { ValidationError, PermissionError, NotFoundError } from '@folkcare/core';
 import {
   createMedicationSchema,
@@ -57,17 +57,23 @@ function handleError(error: unknown, res: Response, operation: string): void {
 }
 
 /**
- * Extract user context from request
- * In production, this would extract from JWT or session
+ * Extract user context from authenticated request
+ *
+ * SECURITY: Reads from req.user, which AuthMiddleware.requireAuth sets ONLY
+ * after verifying the real JWT. Never read X-User-Id / X-User-Roles /
+ * X-User-Permissions headers directly -- those are fully client-controlled
+ * and spoofable by anyone with a valid (even low-privilege) JWT, which was
+ * the root cause of a confirmed live privilege-escalation exploit elsewhere
+ * in this codebase.
  */
 function getUserContext(req: Request): UserContext {
-  const branchId = req.header('X-Branch-Id');
+  const user = req.user!;
   return {
-    userId: req.header('X-User-Id') || 'system',
-    organizationId: req.header('X-Organization-Id') || '',
-    branchIds: branchId ? [branchId] : [],
-    roles: (req.header('X-User-Roles') || 'CAREGIVER').split(',') as Role[],
-    permissions: (req.header('X-User-Permissions') || '').split(',').filter(Boolean),
+    userId: user.userId,
+    organizationId: user.organizationId,
+    branchIds: user.branchIds,
+    roles: user.roles,
+    permissions: user.permissions,
   };
 }
 

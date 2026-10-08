@@ -11,13 +11,14 @@ interface EVVRecordCardProps {
 
 export const EVVRecordCard: React.FC<EVVRecordCardProps> = ({ record, compact = false }) => {
   const statusColors = {
-    IN_PROGRESS: 'bg-blue-100 text-blue-800',
-    COMPLETED: 'bg-green-100 text-green-800',
-    DISPUTED: 'bg-red-100 text-red-800',
-    VERIFIED: 'bg-purple-100 text-purple-800',
+    PENDING: 'bg-blue-100 text-blue-800',
+    COMPLETE: 'bg-green-100 text-green-800',
+    SUBMITTED: 'bg-purple-100 text-purple-800',
+    AMENDED: 'bg-yellow-100 text-yellow-800',
+    VOIDED: 'bg-red-100 text-red-800',
   };
 
-  const statusColor = statusColors[record.status] || 'bg-gray-100 text-gray-800';
+  const statusColor = statusColors[record.recordStatus] || 'bg-gray-100 text-gray-800';
 
   return (
     <Link
@@ -40,7 +41,7 @@ export const EVVRecordCard: React.FC<EVVRecordCardProps> = ({ record, compact = 
           </div>
         </div>
         <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColor}`}>
-          {record.status.replace('_', ' ')}
+          {record.recordStatus.replace('_', ' ')}
         </span>
       </div>
 
@@ -55,28 +56,28 @@ export const EVVRecordCard: React.FC<EVVRecordCardProps> = ({ record, compact = 
             <span className="font-medium">{new Date(record.clockOutTime).toLocaleString()}</span>
           </div>
         )}
-        {record.totalMinutes && (
+        {record.totalDuration && (
           <div className="flex justify-between">
             <span>Duration:</span>
-            <span className="font-medium">{record.totalMinutes} minutes</span>
+            <span className="font-medium">{record.totalDuration} minutes</span>
           </div>
         )}
       </div>
 
       <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm text-gray-500">
-          {record.verificationMethod === 'GPS' && record.gpsCoordinates && (
+          {record.verificationLevel === 'FULL' && record.clockInVerification?.latitude != null && (
             <>
               {/* @ts-ignore */}
               <MapPin className="h-4 w-4" />
               <span>GPS Verified</span>
             </>
           )}
-          {record.verificationMethod !== 'GPS' && (
+          {record.verificationLevel !== 'FULL' && (
             <>
               {/* @ts-ignore */}
               <CheckCircle className="h-4 w-4" />
-              <span>{record.verificationMethod}</span>
+              <span>{record.verificationLevel}</span>
             </>
           )}
         </div>

@@ -11,10 +11,24 @@ import { CreateClientInput, UpdateClientInput, ClientSearchFilters, ClientStatus
 
 /**
  * Extract user context from authenticated request
+ *
+ * SECURITY: Reads from req.user, which is set by AuthMiddleware.requireAuth
+ * ONLY after real JWT verification. Never read from req.userContext, which
+ * (when the now-removed global authContextMiddleware was registered) was
+ * populated directly from client-controllable X-User-Id / X-Organization-Id
+ * headers with zero cross-check against the JWT -- this was the root cause
+ * of a confirmed live exploit (spoofed headers used to bypass a real
+ * low-privilege JWT and delete PHI). Do not reintroduce req.userContext here.
  */
 function getUserContext(req: Request): UserContext {
-  // In production, this would be populated by auth middleware
-  return (req as Request & { userContext: UserContext }).userContext;
+  const user = req.user!;
+  return {
+    userId: user.userId,
+    organizationId: user.organizationId,
+    branchIds: user.branchIds,
+    roles: user.roles,
+    permissions: user.permissions,
+  };
 }
 
 /**
@@ -1040,9 +1054,16 @@ export function createClientRouter(clientService: ClientService, db: Database): 
   router.use(authMiddleware.requireAuth);
 
   // Main CRUD endpoints
+  // NOTE: Route registration order matters — Express matches in order, and any
+  // literal-segment path (e.g. /clients/dashboard) under /clients/:id MUST be
+  // registered BEFORE /clients/:id, or :id will shadow it (e.g. id='dashboard').
+  // All literal-segment /clients/* routes are grouped here, ahead of /clients/:id.
   router.get('/clients', handlers.listClients);
-  router.get('/clients/:id', handlers.getClient);
   router.get('/clients/number/:clientNumber', handlers.getClientByNumber);
+  router.get('/clients/dashboard/stats', handlers.getDashboardStats);
+  router.get('/clients/dashboard', handlers.getClientsDashboard);
+  router.post('/clients/bulk-import', handlers.bulkImportClients);
+  router.get('/clients/:id', handlers.getClient);
   router.post('/clients', handlers.createClient);
   router.patch('/clients/:id', handlers.updateClient);
   router.delete('/clients/:id', handlers.deleteClient);
@@ -1064,13 +1085,6 @@ export function createClientRouter(clientService: ClientService, db: Database): 
 
   // Branch operations
   router.get('/branches/:branchId/clients', handlers.getClientsByBranch);
-
-  // Bulk operations
-  router.post('/clients/bulk-import', handlers.bulkImportClients);
-
-  // Dashboard
-  router.get('/clients/dashboard/stats', handlers.getDashboardStats);
-  router.get('/clients/dashboard', handlers.getClientsDashboard);
 
   return router;
 }

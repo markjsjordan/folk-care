@@ -50,7 +50,7 @@ export const PayStubCard: React.FC<PayStubCardProps> = ({ payStub, compact = fal
                 {payStub.status}
               </span>
               <div className="flex gap-2">
-                <Link to={`/payroll/stubs/${payStub.id}`}>
+                <Link to={`/payroll/pay-stubs/${payStub.id}`}>
                   <Button variant="outline" size="sm">
                     <Eye className="h-4 w-4" />
                   </Button>
@@ -122,7 +122,7 @@ export const PayStubCard: React.FC<PayStubCardProps> = ({ payStub, compact = fal
         </div>
 
         <div className="flex gap-2">
-          <Link to={`/payroll/stubs/${payStub.id}`} className="flex-1">
+          <Link to={`/payroll/pay-stubs/${payStub.id}`} className="flex-1">
             <Button variant="outline" className="w-full" leftIcon={<Eye className="h-4 w-4" />}>
               View Details
             </Button>

@@ -6,6 +6,7 @@
 
 import { Request, Response } from 'express';
 import { CarePlanService } from '../service/care-plan-service';
+import { TemplateService, CreateFromTemplateOptions } from '../service/template.service';
 import { UserContext, Role, ValidationError, PermissionError, NotFoundError } from '@folkcare/core';
 import { CarePlanStatus, CarePlanType, TaskStatus, TaskCategory, CarePlanSearchFilters, TaskInstanceSearchFilters } from '../types/care-plan';
 
@@ -73,7 +74,7 @@ function getUserContext(req: Request): UserContext {
 /**
  * Create API handlers for care plans
  */
-export function createCarePlanHandlers(service: CarePlanService) {
+export function createCarePlanHandlers(service: CarePlanService, templateService?: TemplateService) {
   return {
     /**
      * @openapi
@@ -590,6 +591,59 @@ export function createCarePlanHandlers(service: CarePlanService) {
     },
 
     /**
+     * POST /care-plans/from-template
+     * Create a care plan from a template
+     */
+    async createCarePlanFromTemplate(req: Request, res: Response) {
+      try {
+        if (!templateService) {
+          res.status(500).json({ error: 'Template service not configured' });
+          return;
+        }
+
+        const context = getUserContext(req);
+        if (!context.organizationId) {
+          res.status(400).json({ error: 'Organization context is required' });
+          return;
+        }
+
+        const { templateId, clientId, name, goals, notes, tasks, startDate, endDate, coordinatorId, branchId } = req.body;
+
+        if (!templateId || !clientId) {
+          res.status(400).json({ error: 'templateId and clientId are required' });
+          return;
+        }
+
+        // CustomizeTemplatePage.tsx sends camelCase startDate/endDate, but
+        // CreateFromTemplateOptions expects snake_case start_date/end_date.
+        // Map them here or date overrides will silently be dropped.
+        const customizations: CreateFromTemplateOptions = {
+          name,
+          goals,
+          notes,
+          tasks,
+          coordinatorId,
+          branchId,
+          start_date: startDate ? new Date(startDate) : undefined,
+          end_date: endDate ? new Date(endDate) : undefined,
+        };
+
+        // Use context.organizationId (from the authenticated user), never
+        // req.body, to avoid a cross-org data leak.
+        const carePlan = await templateService.createFromTemplate(
+          templateId,
+          clientId,
+          context.organizationId,
+          context,
+          customizations
+        );
+        res.status(201).json(carePlan);
+      } catch (error: unknown) {
+        handleError(error, res, 'creating care plan from template');
+      }
+    },
+
+    /**
      * GET /analytics/care-plans
      * Get care plan analytics
      */
@@ -620,6 +674,117 @@ export function createCarePlanHandlers(service: CarePlanService) {
         res.json(metrics);
       } catch (error: unknown) {
         handleError(error, res, 'fetching task metrics');
+      }
+    },
+
+    /**
+     * @openapi
+     * /api/care-plans/{id}/version:
+     *   post:
+     *     tags:
+     *       - Care Plans
+     *     summary: Create version N+1 upon clinical plan review
+     *     description: Clone and bump care plan version with audit logging, Texas HHSC (60-day) and Florida AHCA (60/90-day) review compliance
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: string
+     *           format: uuid
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - changeReason
+     *             properties:
+     *               changeReason:
+     *                 type: string
+     *               reviewDate:
+     *                 type: string
+     *                 format: date-time
+     *               stateJurisdiction:
+     *                 type: string
+     *                 enum: [TX, FL]
+     *     responses:
+     *       201:
+     *         description: Care plan version created
+     */
+    async createCarePlanVersion(req: Request, res: Response) {
+      try {
+        const context = getUserContext(req);
+        const { id } = req.params;
+        if (!id) {
+          res.status(400).json({ error: 'Care plan ID is required' });
+          return;
+        }
+
+        const { changeReason, reviewDate, signature, contentOverrides, stateJurisdiction } = req.body;
+        if (!changeReason || typeof changeReason !== 'string' || changeReason.trim().length === 0) {
+          res.status(400).json({ error: 'changeReason is required for Medicaid audit compliance' });
+          return;
+        }
+
+        const signaturePayload = signature
+          ? {
+              ...signature,
+              ipAddress: signature.ipAddress || req.ip || undefined,
+            }
+          : undefined;
+
+        const result = await service.createPlanReviewVersion(
+          id,
+          {
+            changeReason: changeReason.trim(),
+            reviewDate: reviewDate ? new Date(reviewDate) : undefined,
+            signature: signaturePayload,
+            contentOverrides,
+            stateJurisdiction,
+          },
+          context
+        );
+
+        res.status(201).json(result);
+      } catch (error: unknown) {
+        handleError(error, res, 'creating care plan version');
+      }
+    },
+
+    /**
+     * @openapi
+     * /api/care-plans/{id}/versions:
+     *   get:
+     *     tags:
+     *       - Care Plans
+     *     summary: Get care plan version history and diffs
+     *     description: Retrieve all historical versions and diffs for Medicaid audits
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: string
+     *           format: uuid
+     *     responses:
+     *       200:
+     *         description: List of care plan versions with diffs
+     */
+    async getCarePlanVersions(req: Request, res: Response) {
+      try {
+        const context = getUserContext(req);
+        const { id } = req.params;
+        if (!id) {
+          res.status(400).json({ error: 'Care plan ID is required' });
+          return;
+        }
+
+        const versions = await service.getCarePlanVersionHistory(id, context);
+        res.json(versions);
+      } catch (error: unknown) {
+        handleError(error, res, 'fetching care plan versions');
       }
     },
   };

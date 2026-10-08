@@ -2,14 +2,30 @@
  * Admin routes for system management and monitoring
  */
 
-import { Router, type Router as RouterType } from 'express';
+import { Router, type Router as RouterType, type Request, type Response, type NextFunction } from 'express';
 import { getCacheService } from '@folkcare/core/service/cache.service';
-import { requireAuth } from '../middleware/auth-context';
+import { AuthMiddleware, getDatabase } from '@folkcare/core';
 
 const router: RouterType = Router();
 
+// Lazily construct AuthMiddleware on first request so this module can be
+// imported (and the router mounted) before initializeDatabase() runs in
+// server.ts's startup sequence.
+let authMiddleware: AuthMiddleware | undefined;
+function getAuthMiddleware(): AuthMiddleware {
+  if (authMiddleware === undefined) {
+    authMiddleware = new AuthMiddleware(getDatabase());
+  }
+  return authMiddleware;
+}
+
 // Apply authentication to all admin routes
-router.use(requireAuth);
+// SECURITY: Must be the real JWT-verifying AuthMiddleware.requireAuth, not
+// the mock requireAuth (which trusted spoofable X-User-* headers with zero
+// JWT cross-check and was the root cause of a confirmed live exploit).
+router.use((req: Request, res: Response, next: NextFunction) => {
+  getAuthMiddleware().requireAuth(req, res, next).catch(next);
+});
 
 /**
  * Get cache statistics

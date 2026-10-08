@@ -247,3 +247,15 @@ export interface CreatePayRunInput {
 export interface ApprovePayRunInput {
   notes?: string;
 }
+
+export interface CreatePayPeriodInput {
+  organizationId: string;
+  branchId?: string;
+  periodType: PayPeriodType;
+  startDate: string;
+  endDate: string;
+  payDate: string;
+  cutoffDate?: string;
+  approvalDeadline?: string;
+  notes?: string;
+}

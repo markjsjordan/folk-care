@@ -1,4 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { useCreateClient, useClients } from '@/verticals/client-demographics/hooks';
+import type { CreateClientInput } from '@/verticals/client-demographics/types';
+import { useAuth } from '@/core/hooks';
 
 /**
  * Client Intake Workflow
@@ -228,10 +233,96 @@ export default function ClientIntakeWorkflow() {
     }
   };
 
-  const handleSubmit = () => {
-    // In real app: POST to backend
-    alert('Client intake submitted successfully!');
-    // Navigate to client detail page
+  const createClient = useCreateClient();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  // Only used to discover a real, already-seeded branchId for this organization
+  // (see KNOWN GAP note below) — not used for anything else.
+  const { data: existingClients } = useClients({ page: 1, pageSize: 1 });
+
+  const handleSubmit = async () => {
+    if (!user?.organizationId) {
+      toast.error('Unable to submit: no organization context for the signed-in user.');
+      return;
+    }
+
+    // KNOWN GAP (documented, not silently papered over — see FC-AUDIT-CLIENTS report):
+    // There is currently no backend endpoint to list/select an organization's
+    // branches (confirmed: no GET /api/branches, no GET /api/organizations/:id/branches).
+    // CreateClientInput requires a real branchId UUID. As a stopgap, we reuse the
+    // branchId off an existing client in this organization (clients already carry a
+    // valid branchId) rather than inventing a hardcoded ID. This is NOT a general
+    // solution for orgs with multiple branches or zero existing clients — a real
+    // branch-selector UI + backend branch-list endpoint is a follow-up, out of scope
+    // for this pass.
+    const fallbackBranchId = existingClients?.items?.[0]?.branchId;
+    if (!fallbackBranchId) {
+      toast.error(
+        'Unable to submit: no existing branch could be found for this organization. ' +
+          'Branch selection is not yet implemented (see FC-AUDIT-CLIENTS follow-up).'
+      );
+      return;
+    }
+
+    // KNOWN GAP — HIPAA/EVV/financial consent + signature are collected in Step 6
+    // (intakeData.consents, intakeData.signature) but CreateClientInput has NO
+    // fields to receive them, and there is no existing consent-storage pattern in
+    // this codebase that fits client intake (the one consent table that exists,
+    // `family_consent`, is scoped to the family-portal domain — different consent
+    // types, requires a family_member_id FK — not a fit without its own schema
+    // change). Persisting consent/signature data needs a backend extension
+    // (new fields on clients, or a dedicated client-consent table/endpoint) that is
+    // too large for this pass. Rather than silently dropping this data (which would
+    // be WORSE than today's honest-fake alert(), since it would look captured when
+    // it wasn't), we keep collecting it in the UI but do NOT claim it is saved.
+    const consentsComplete = Object.values(intakeData.consents || {}).every(Boolean);
+    if (!consentsComplete || !intakeData.signature) {
+      toast.error('Please complete all consents and provide a signature before submitting.');
+      return;
+    }
+
+    const input: CreateClientInput = {
+      organizationId: user.organizationId,
+      branchId: fallbackBranchId,
+      firstName: intakeData.firstName || '',
+      lastName: intakeData.lastName || '',
+      dateOfBirth: intakeData.dateOfBirth || '',
+      email: intakeData.email || undefined,
+      primaryPhone: intakeData.phone
+        ? { number: intakeData.phone, type: 'MOBILE', canReceiveSMS: false }
+        : undefined,
+      primaryAddress: {
+        type: 'HOME',
+        line1: intakeData.address?.line1 || '',
+        line2: intakeData.address?.line2 || undefined,
+        city: intakeData.address?.city || '',
+        state: intakeData.address?.state || '',
+        postalCode: intakeData.address?.postalCode || '',
+        country: 'US',
+      },
+      emergencyContacts: (intakeData.emergencyContacts || [])
+        .filter((c) => c.name && c.phone)
+        .map((c) => ({
+          id: crypto.randomUUID(),
+          name: c.name,
+          relationship: c.relationship,
+          phone: { number: c.phone, type: 'MOBILE' as const, canReceiveSMS: false },
+          isPrimary: true,
+          canMakeHealthcareDecisions: false,
+        })),
+      status: 'PENDING_INTAKE',
+    };
+
+    try {
+      const newClient = await createClient.mutateAsync(input);
+      toast.success(
+        'Client intake submitted. NOTE: consent/signature capture is not yet persisted — see FC-AUDIT-CLIENTS follow-up.',
+        { duration: 6000 }
+      );
+      navigate(`/clients/${newClient.id}`);
+    } catch {
+      // useCreateClient's onError already surfaces a toast; nothing further to do here.
+    }
   };
 
   return (

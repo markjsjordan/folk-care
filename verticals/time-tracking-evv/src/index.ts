@@ -76,6 +76,19 @@ export { CryptoUtils } from './utils/crypto-utils';
 
 // API Handlers
 export { EVVHandlers } from './api/evv-handlers';
+export { AggregatorHandlers } from './api/aggregator-handlers';
+export type { APIRequest, APIResponse } from './api/aggregator-handlers';
+
+// Aggregator submission service + repositories (FC-AUDIT-EVV WU-4)
+export {
+  EVVAggregatorService,
+  type IAggregatorConfigRepository,
+  type IAggregatorSubmissionRepository,
+} from './service/evv-aggregator-service';
+export {
+  AggregatorSubmissionRepository,
+  AggregatorConfigRepository,
+} from './service/aggregator-submission-repository';
 
 // Aggregators (multi-state support)
 export * from './aggregators/index';

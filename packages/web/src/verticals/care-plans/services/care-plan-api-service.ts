@@ -8,7 +8,13 @@ import type {
   CompleteTaskInput,
   CarePlanSearchFilters,
   TaskInstanceSearchFilters,
+  ProgressNote,
 } from '../types';
+
+export type CreateProgressNoteInput = Omit<
+  ProgressNote,
+  'id' | 'authorId' | 'authorName' | 'authorRole' | 'noteDate' | 'createdAt' | 'updatedAt' | 'reviewedBy' | 'reviewedAt' | 'approved'
+>;
 
 export interface CarePlanApiService {
   getCarePlans(filters?: CarePlanSearchFilters & SearchParams): Promise<PaginatedResult<CarePlan>>;
@@ -19,6 +25,8 @@ export interface CarePlanApiService {
   getTasks(filters?: TaskInstanceSearchFilters & SearchParams): Promise<PaginatedResult<TaskInstance>>;
   getTaskById(id: string): Promise<TaskInstance>;
   completeTask(id: string, input: CompleteTaskInput): Promise<TaskInstance>;
+  getProgressNotes(carePlanId: string): Promise<ProgressNote[]>;
+  createProgressNote(input: CreateProgressNoteInput): Promise<ProgressNote>;
 }
 
 export const createCarePlanApiService = (apiClient: ApiClient): CarePlanApiService => {
@@ -56,7 +64,7 @@ export const createCarePlanApiService = (apiClient: ApiClient): CarePlanApiServi
     },
 
     async updateCarePlan(id: string, input: UpdateCarePlanInput): Promise<CarePlan> {
-      return apiClient.patch<CarePlan>(`/api/care-plans/${id}`, input);
+      return apiClient.put<CarePlan>(`/api/care-plans/${id}`, input);
     },
 
     async activateCarePlan(id: string): Promise<CarePlan> {
@@ -92,6 +100,14 @@ export const createCarePlanApiService = (apiClient: ApiClient): CarePlanApiServi
 
     async completeTask(id: string, input: CompleteTaskInput): Promise<TaskInstance> {
       return apiClient.post<TaskInstance>(`/api/tasks/${id}/complete`, input);
+    },
+
+    async getProgressNotes(carePlanId: string): Promise<ProgressNote[]> {
+      return apiClient.get<ProgressNote[]>(`/api/care-plans/${carePlanId}/progress-notes`);
+    },
+
+    async createProgressNote(input: CreateProgressNoteInput): Promise<ProgressNote> {
+      return apiClient.post<ProgressNote>('/api/progress-notes', input);
     },
   };
 };

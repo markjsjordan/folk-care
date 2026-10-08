@@ -37,7 +37,7 @@ export const AuditDetailPage: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={() => navigate('/audits')}>
+        <Button variant="ghost" onClick={() => navigate('/quality-assurance/audits')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">

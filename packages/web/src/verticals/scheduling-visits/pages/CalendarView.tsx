@@ -3,6 +3,7 @@ import { Calendar, momentLocalizer, View, SlotInfo, EventProps } from 'react-big
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import moment from 'moment';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, Plus, List, Layout, Home, Phone, Building2, ZoomIn, ZoomOut, Clock } from 'lucide-react';
 import { useCalendarVisits, useVisitApi, useCaregiverAvailability } from '../hooks/useVisits';
@@ -163,6 +164,7 @@ export const CalendarView: React.FC = () => {
   const { user } = useAuth();
   const visitApi = useVisitApi();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   // State
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -325,61 +327,8 @@ export const CalendarView: React.FC = () => {
     });
   }, [visits, caregiverColorMap]);
 
-  // Handle event drop (drag and drop reassignment)
-  const handleEventDrop = useCallback(async () => {
-    try {
-      // Note: Time adjustment via drag-and-drop not yet implemented
-      // In a full implementation, we'd update the visit time
-      toast.error('Time adjustment not yet implemented. Use drag between caregivers for reassignment.');
-
-      // Refresh data
-      await refetch();
-    } catch (error) {
-      console.error('Error updating visit:', error);
-      toast.error('Failed to update visit');
-    }
-  }, [refetch]);
-
-  // Handle event resize
-  const handleEventResize = useCallback(async () => {
-    try {
-      // Note: Implement time adjustment in future iteration
-      toast.error('Time adjustment not yet implemented');
-    } catch (error) {
-      console.error('Error resizing event:', error);
-      toast.error('Failed to resize event');
-    }
-  }, []);
-
-  // Handle event selection - toast notification (modal implementation deferred to future)
-  const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    toast(`Visit: ${event.title} - Date: ${moment(event.start).format('YYYY-MM-DD HH:mm')}`, {
-      duration: 3000,
-    });
-    // Future: Open visit detail modal with pre-populated date from event.start
-  }, []);
-
-  // Handle slot selection (creating new visit)
-  const handleSelectSlot = useCallback((_slotInfo: SlotInfo) => {
-    // Note: Create visit modal to be implemented in future iteration
-    toast('Create visit not yet implemented', { duration: 2000 });
-  }, []);
-
-  // Custom event style getter (for color-coding)
-  const eventStyleGetter = useCallback((event: CalendarEvent) => {
-    return {
-      style: {
-        backgroundColor: event.color,
-        borderColor: event.color,
-        color: '#FFFFFF',
-        borderRadius: '4px',
-        opacity: event.resource.status === 'CANCELLED' ? 0.5 : 1,
-        border: event.resource.status === 'UNASSIGNED' ? '2px dashed' : '1px solid',
-      },
-    };
-  }, []);
-
-  // Check for conflicts when assigning
+  // Check for conflicts when assigning (used by handleEventDrop for caregiver
+  // reassignment flows; preserves the blocking window.confirm() UX)
   const checkAndAssignCaregiver = useCallback(async (visitId: string, caregiverId: string) => {
     try {
       // Check for conflicts
@@ -414,8 +363,109 @@ export const CalendarView: React.FC = () => {
     }
   }, [visitApi, queryClient]);
 
-  // Expose for future use
-  console.log('checkAndAssignCaregiver available', checkAndAssignCaregiver);
+  /**
+   * Shared helper for date/time schedule changes (drag-move and resize).
+   *
+   * GAP (flagged, not fabricated): packages/app/src/routes/visits.ts exposes
+   * only PUT /:id/assign, POST /:id/check-conflicts, POST /:id/check-assignment,
+   * POST /:id/notes - there is no PATCH/PUT endpoint to update a visit's
+   * scheduled date/time or duration. Adding that endpoint is backend work
+   * outside this ticket's router-wiring scope. Rather than calling a
+   * nonexistent API or silently dropping the drag, this helper surfaces the
+   * gap and snaps the event back to its persisted position via refetch().
+   */
+  const updateVisitSchedule = useCallback(async (_visitId: string, _start: Date, _end: Date) => {
+    toast('Rescheduling a visit requires a backend endpoint that does not exist yet (no PATCH/PUT for date/time on /api/visits). Change not saved.', {
+      duration: 4000,
+      icon: '⚠️',
+    });
+    await refetch();
+    return false;
+  }, [refetch]);
+
+  // Handle event drop (drag-move). This calendar renders a single timeline
+  // (no `resources` prop passed to DragAndDropCalendar), so react-big-calendar
+  // never supplies a resourceId here - a drag can only change date/time, never
+  // which caregiver a visit is assigned to. The caregiver-reassignment branch
+  // below is therefore unreachable in the current UI and is kept only as a
+  // defensive no-op in case a future resource-grouped view adds that capability.
+  const handleEventDrop = useCallback(async ({ event, start, end, resourceId }: { event: CalendarEvent; start: Date | string; end: Date | string; resourceId?: string | number }) => {
+    try {
+      const visit = event.resource;
+      const newStart = start instanceof Date ? start : new Date(start);
+      const newEnd = end instanceof Date ? end : new Date(end);
+
+      // Caregiver reassignment path - only reachable if resourceId is present
+      // and differs from the visit's current caregiver (not possible today,
+      // see comment above; guarded defensively rather than assumed impossible).
+      if (resourceId != null && String(resourceId) !== visit.assignedCaregiverId) {
+        await checkAndAssignCaregiver(visit.id, String(resourceId));
+        return;
+      }
+
+      const originalStart = event.start;
+      const dateTimeChanged =
+        newStart.getTime() !== originalStart.getTime() || newEnd.getTime() !== event.end.getTime();
+
+      if (dateTimeChanged) {
+        await updateVisitSchedule(visit.id, newStart, newEnd);
+        return;
+      }
+
+      await refetch();
+    } catch (error) {
+      console.error('Error updating visit:', error);
+      toast.error('Failed to update visit');
+    }
+  }, [refetch, checkAndAssignCaregiver, updateVisitSchedule]);
+
+  // Handle event resize (duration change)
+  const handleEventResize = useCallback(async ({ event, start, end }: { event: CalendarEvent; start: Date | string; end: Date | string }) => {
+    try {
+      const newStart = start instanceof Date ? start : new Date(start);
+      const newEnd = end instanceof Date ? end : new Date(end);
+      await updateVisitSchedule(event.resource.id, newStart, newEnd);
+    } catch (error) {
+      console.error('Error resizing event:', error);
+      toast.error('Failed to resize event');
+    }
+  }, [updateVisitSchedule]);
+
+  // Handle event selection - navigate to a deep-linked visit detail query param.
+  // No dedicated visit-detail route/modal exists yet (verified: no such route in
+  // App.tsx, no VisitDetail component under scheduling-visits/components). This
+  // is a pragmatic minimal implementation; a real detail view should be a
+  // follow-up.
+  const handleSelectEvent = useCallback((event: CalendarEvent) => {
+    navigate(`/visits?id=${event.resource.id}`);
+  }, [navigate]);
+
+  // Handle slot selection (creating new visit).
+  // GAP: ScheduleService.createVisit() already exists at
+  // verticals/scheduling-visits/src/service/schedule-service.ts:179, but no
+  // HTTP route exposes it (packages/app/src/routes/visits.ts has no POST /).
+  // No VisitForm/CreateVisitModal component exists anywhere in the web
+  // package either (verified via search). Wiring a full create-visit route +
+  // modal is backend+frontend work beyond this ticket's thin-wiring scope for
+  // the scheduling-visits vertical; surfacing the gap clearly instead of a
+  // silent no-op or a fabricated call to a nonexistent endpoint.
+  const handleSelectSlot = useCallback((_slotInfo: SlotInfo) => {
+    toast('Creating a visit from the calendar needs a new POST /api/visits route and a visit form - neither exists yet.', { duration: 4000 });
+  }, []);
+
+  // Custom event style getter (for color-coding)
+  const eventStyleGetter = useCallback((event: CalendarEvent) => {
+    return {
+      style: {
+        backgroundColor: event.color,
+        borderColor: event.color,
+        color: '#FFFFFF',
+        borderRadius: '4px',
+        opacity: event.resource.status === 'CANCELLED' ? 0.5 : 1,
+        border: event.resource.status === 'UNASSIGNED' ? '2px dashed' : '1px solid',
+      },
+    };
+  }, []);
 
   // Enhanced error handling with differentiated error types and better UX
   if (error != null && !isLoading && visits.length === 0) {
@@ -813,7 +863,7 @@ export const CalendarView: React.FC = () => {
               }
               action={
                 <button
-                  onClick={() => toast('Create visit not yet implemented', { duration: 2000 })}
+                  onClick={() => toast('Creating a visit from the calendar needs a new POST /api/visits route and a visit form - neither exists yet.', { duration: 4000 })}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors font-medium"
                 >
                   <Plus className="h-5 w-5" />
