@@ -90,8 +90,20 @@ export const CaregiverDetail: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-700">
               <Briefcase className="h-4 w-4 text-gray-400" />
-              <span>{caregiver.employmentType?.replace(/_/g, ' ')}</span>
+              <span>Type: {caregiver.employmentType?.replace(/_/g, ' ')}</span>
             </div>
+            {caregiver.dateOfBirth && (
+              <div className="flex items-center gap-2 text-sm text-gray-700">
+                <Calendar className="h-4 w-4 text-gray-400" />
+                <span>DOB: {formatDate(caregiver.dateOfBirth)}</span>
+              </div>
+            )}
+            {caregiver.employmentStatus && (
+              <div className="flex items-center gap-2 text-sm text-gray-700">
+                <Briefcase className="h-4 w-4 text-gray-400" />
+                <span>Status: {caregiver.employmentStatus.replace(/_/g, ' ')}</span>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

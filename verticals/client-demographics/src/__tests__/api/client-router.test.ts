@@ -24,12 +24,14 @@ vi.mock('@folkcare/core', async () => {
     ...actual,
     AuthMiddleware: class {
       requireAuth = (req: any, _res: any, next: any) => {
-        req.userContext = {
+        const user = {
           userId: 'user-1',
           organizationId: 'org-1',
           roles: ['ADMIN'],
           permissions: ['clients:read', 'clients:create', 'clients:update', 'clients:delete', 'clients:audit'],
         };
+        req.user = user;
+        req.userContext = user;
         next();
       };
     },

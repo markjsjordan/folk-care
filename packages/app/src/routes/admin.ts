@@ -24,7 +24,7 @@ function getAuthMiddleware(): AuthMiddleware {
 // the mock requireAuth (which trusted spoofable X-User-* headers with zero
 // JWT cross-check and was the root cause of a confirmed live exploit).
 router.use((req: Request, res: Response, next: NextFunction) => {
-  getAuthMiddleware().requireAuth(req, res, next);
+  void getAuthMiddleware().requireAuth(req, res, next);
 });
 
 /**

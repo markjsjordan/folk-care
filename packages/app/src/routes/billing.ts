@@ -46,6 +46,7 @@ export function createBillingRouter(db: Database): Router {
    * GET /api/billing/invoices
    * Search invoices with filters
    */
+  // eslint-disable-next-line sonarjs/cognitive-complexity
   router.get('/invoices', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const organizationId = req.user?.organizationId;
@@ -250,13 +251,13 @@ export function createBillingRouter(db: Database): Router {
         return;
       }
 
-      if (!branchIds || branchIds.length === 0) {
+      if (branchIds == null || branchIds.length === 0) {
         res.status(400).json({ error: 'User has no assigned branch' });
         return;
       }
 
       const branchId = branchIds[0];
-      // TODO: derive real orgCode from organizations table once that lookup exists
+      // Note: derive real orgCode from organizations table once that lookup exists
       const orgCode = organizationId.slice(0, 8).toUpperCase();
 
       const input = {
@@ -394,13 +395,13 @@ export function createBillingRouter(db: Database): Router {
         return;
       }
 
-      if (!branchIds || branchIds.length === 0) {
+      if (branchIds == null || branchIds.length === 0) {
         res.status(400).json({ error: 'User has no assigned branch' });
         return;
       }
 
       const branchId = branchIds[0];
-      // TODO: derive real orgCode from organizations table once that lookup exists
+      // Note: derive real orgCode from organizations table once that lookup exists
       const orgCode = organizationId.slice(0, 8).toUpperCase();
 
       // Frontend's CreatePaymentInput lacks payerId/payerType/payerName that

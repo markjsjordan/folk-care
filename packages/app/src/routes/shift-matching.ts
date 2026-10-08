@@ -16,7 +16,6 @@ import type {
   MatchShiftInput,
   CreateProposalInput,
   RespondToProposalInput,
-  MatchQuality,
   ShiftPriority,
   MatchingStatus,
   ProposalStatus,
@@ -156,7 +155,6 @@ export function createShiftMatchingRouter(db: Database): Router {
       };
       // matchQuality is accepted by the frontend filter type but has no
       // corresponding field in ProposalFilters; intentionally not forwarded.
-      void (req.query['matchQuality'] as MatchQuality | undefined);
 
       const pagination = {
         page: parseInt((req.query['page'] as string | undefined) ?? '1', 10),

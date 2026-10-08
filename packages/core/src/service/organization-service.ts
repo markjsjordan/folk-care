@@ -19,12 +19,23 @@ import { OrganizationRepository } from '../repository/organization-repository';
 import { UserRepository, CreateUserRequest } from '../repository/user-repository';
 import { Database } from '../db/connection';
 
+export interface TeamMember {
+  id: UUID;
+  firstName: string;
+  lastName: string;
+  email: string;
+  roles: string[];
+  status: string;
+  createdAt: Date;
+}
+
 export interface IOrganizationService {
   registerOrganization(request: CreateOrganizationRequest): Promise<{
     organization: Organization;
     adminUserId: UUID;
   }>;
   getOrganizationById(id: UUID): Promise<Organization>;
+  getOrganizationUsers(organizationId: UUID): Promise<TeamMember[]>;
   
   // Invitation management
   createInvitation(
@@ -35,6 +46,8 @@ export interface IOrganizationService {
   getInvitationDetails(token: string): Promise<InviteDetails>;
   acceptInvitation(request: AcceptInviteRequest): Promise<UUID>;
   revokeInvitation(token: string, revokedBy: UUID): Promise<void>;
+  revokeInvitationById(invitationId: UUID, organizationId: UUID, revokedBy: UUID): Promise<void>;
+  resendInvitation(invitationId: UUID, organizationId: UUID, resendBy: UUID): Promise<void>;
   getOrganizationInvitations(organizationId: UUID): Promise<InviteToken[]>;
 }
 
@@ -389,5 +402,26 @@ export class OrganizationService implements IOrganizationService {
 
   private generateTempId(): UUID {
     return '00000000-0000-0000-0000-000000000000';
+  }
+
+  async getOrganizationUsers(organizationId: UUID): Promise<TeamMember[]> {
+    const users = await this.userRepo.getUsersByOrganization(organizationId);
+    return users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      email: u.email,
+      roles: u.roles,
+      status: u.status,
+      createdAt: new Date(),
+    }));
+  }
+
+  async resendInvitation(invitationId: UUID, organizationId: UUID, resendBy: UUID): Promise<void> {
+    await this.userRepo.resendInviteToken(invitationId, organizationId, resendBy);
+  }
+
+  async revokeInvitationById(invitationId: UUID, organizationId: UUID, revokedBy: UUID): Promise<void> {
+    await this.userRepo.revokeInviteById(invitationId, organizationId, revokedBy);
   }
 }

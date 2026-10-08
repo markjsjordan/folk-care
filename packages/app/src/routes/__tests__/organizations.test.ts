@@ -252,20 +252,23 @@ describe('Organization Routes', () => {
           methods: Object.keys(layer.route.methods),
         }));
 
-      // 12 endpoints total:
+      // 15 endpoints total:
       // POST /signup
       // POST /organizations/register
       // GET /organizations/:id
       // PUT /organizations/:id
       // POST /organizations/:id/invitations
       // GET /organizations/:id/invitations
+      // GET /organizations/:id/users
+      // POST /organizations/:id/invitations/:invitationId/resend
+      // DELETE /organizations/:id/invitations/:invitationId
       // GET /invitations/:token
       // POST /invitations/accept
       // DELETE /invitations/:token
       // POST /organizations/:id/seed-demo
       // DELETE /organizations/:id/demo-data
       // GET /organizations/:id/demo-data/status
-      expect(routes.length).toBe(12);
+      expect(routes.length).toBe(15);
     });
   });
 

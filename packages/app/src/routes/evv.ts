@@ -136,7 +136,7 @@ export function createEVVRouter(db: Database): Router {
     try {
       const apiReq = { body: req.body, params: req.params, query: req.query as Record<string, string>, user: req.user! };
       const result = await evvHandlers.clockIn(apiReq);
-      res.status(result.status).json(result.error ? { error: result.error } : result.data);
+      res.status(result.status).json(result.error !== undefined ? { error: result.error } : result.data);
     } catch (error) {
       next(error);
     }
@@ -150,7 +150,7 @@ export function createEVVRouter(db: Database): Router {
     try {
       const apiReq = { body: { ...req.body, evvRecordId: req.params.id }, params: req.params, query: req.query as Record<string, string>, user: req.user! };
       const result = await evvHandlers.clockOut(apiReq);
-      res.status(result.status).json(result.error ? { error: result.error } : result.data);
+      res.status(result.status).json(result.error !== undefined ? { error: result.error } : result.data);
     } catch (error) {
       next(error);
     }
@@ -164,7 +164,7 @@ export function createEVVRouter(db: Database): Router {
     try {
       const apiReq = { body: req.body, params: req.params, query: req.query as Record<string, string>, user: req.user! };
       const result = await aggregatorHandlers.getSubmissionStats(apiReq);
-      res.status(result.status).json(result.error ? { error: result.error } : { data: result.data });
+      res.status(result.status).json(result.error !== undefined ? { error: result.error } : { data: result.data });
     } catch (error) {
       next(error);
     }
@@ -178,7 +178,7 @@ export function createEVVRouter(db: Database): Router {
     try {
       const apiReq = { body: req.body, params: req.params, query: req.query as Record<string, string>, user: req.user! };
       const result = await aggregatorHandlers.getPendingSubmissions(apiReq);
-      res.status(result.status).json(result.error ? { error: result.error } : { data: result.data });
+      res.status(result.status).json(result.error !== undefined ? { error: result.error } : { data: result.data });
     } catch (error) {
       next(error);
     }
@@ -192,7 +192,7 @@ export function createEVVRouter(db: Database): Router {
     try {
       const apiReq = { body: req.body, params: req.params, query: req.query as Record<string, string>, user: req.user! };
       const result = await aggregatorHandlers.retryAllPending(apiReq);
-      res.status(result.status).json(result.error ? { error: result.error } : { data: result.data });
+      res.status(result.status).json(result.error !== undefined ? { error: result.error } : { data: result.data });
     } catch (error) {
       next(error);
     }
@@ -206,7 +206,7 @@ export function createEVVRouter(db: Database): Router {
     try {
       const apiReq = { body: req.body, params: { submissionId: req.params.id!, ...req.params }, query: req.query as Record<string, string>, user: req.user! };
       const result = await aggregatorHandlers.retrySubmission(apiReq);
-      res.status(result.status).json(result.error ? { error: result.error } : { data: result.data });
+      res.status(result.status).json(result.error !== undefined ? { error: result.error } : { data: result.data });
     } catch (error) {
       next(error);
     }
@@ -220,7 +220,7 @@ export function createEVVRouter(db: Database): Router {
     try {
       const apiReq = { body: req.body, params: req.params, query: req.query as Record<string, string>, user: req.user! };
       const result = await aggregatorHandlers.getSubmissionsByRecord(apiReq);
-      res.status(result.status).json(result.error ? { error: result.error } : { data: result.data });
+      res.status(result.status).json(result.error !== undefined ? { error: result.error } : { data: result.data });
     } catch (error) {
       next(error);
     }
