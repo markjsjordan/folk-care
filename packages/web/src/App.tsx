@@ -89,6 +89,8 @@ const MatchAnalyticsDashboard = React.lazy(() => import('./verticals/shift-match
 const VisitList = React.lazy(() => import('./verticals/scheduling-visits/pages/VisitList').then((m) => ({ default: m.VisitList })));
 const CalendarView = React.lazy(() => import('./verticals/scheduling-visits/pages/CalendarView').then((m) => ({ default: m.CalendarView })));
 const ScheduleBuilderPage = React.lazy(() => import('./pages/scheduling/ScheduleBuilderPage'));
+const VisitDetailPage = React.lazy(() => import('./pages/scheduling/VisitDetailPage').then((m) => ({ default: m.VisitDetailPage })));
+
 
 const CaregiverList = React.lazy(() => import('./verticals/caregivers/pages/CaregiverList').then((m) => ({ default: m.CaregiverList })));
 const CreateCaregiverPage = React.lazy(() => import('./verticals/caregivers/pages/CreateCaregiverPage').then((m) => ({ default: m.CreateCaregiverPage })));
@@ -374,7 +376,28 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/scheduling/visits/:id"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <VisitDetailPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/visits/:id"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <VisitDetailPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/shift-matching"
+
         element={
           <ProtectedRoute>
             <AppShell>

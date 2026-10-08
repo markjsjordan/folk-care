@@ -531,35 +531,66 @@ export function createVisitRouter(db: Database): Router {
     }
   });
 
+  // Initialize compliance service for scheduling checks
+  const complianceService = new ComplianceAutopilotService(db);
+
   /**
    * GET /api/visits/:id
-   * Get single visit by ID
+   * Get a single visit by ID
    */
   router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { id } = req.params;
-      if (!isValidUUID(id)) {
-        res.status(400).json({ success: false, error: 'Invalid visit ID format' });
+      const context = getUserContext(req);
+      const { id: visitId } = req.params;
+
+      if (!isValidUUID(visitId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid visit ID format',
+        });
         return;
       }
+
+      if (!context.organizationId) {
+        res.status(400).json({
+          success: false,
+          error: 'Organization ID is required',
+        });
+        return;
+      }
+
       const repository = new ScheduleRepository(db.getPool());
-      const visit = await repository.getVisitById(id);
+      const visit = await repository.getVisitById(visitId);
+
       if (!visit) {
-        res.status(404).json({ success: false, error: 'Visit not found' });
+        res.status(404).json({
+          success: false,
+          error: 'Visit not found',
+        });
         return;
       }
-      res.json({ success: true, data: visit });
+
+      if (visit.organizationId !== context.organizationId) {
+        res.status(403).json({
+          success: false,
+          error: 'Access denied',
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: visit,
+      });
     } catch (error) {
       next(error);
     }
   });
 
-  // Initialize compliance service for scheduling checks
-  const complianceService = new ComplianceAutopilotService(db);
-
   /**
    * PUT /api/visits/:id/assign
    * Assign a caregiver to a visit
+
    * Requires coordinator or admin role
    *
    * Body:
