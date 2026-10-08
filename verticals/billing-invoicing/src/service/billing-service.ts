@@ -334,6 +334,74 @@ export class BillingService {
   }
 
   /**
+   * Update invoice fields; only allowed while invoice is editable.
+   */
+  async updateInvoice(id: UUID, input: Partial<Invoice>, userId: UUID): Promise<Invoice> {
+    const invoice = await this.repository.findInvoiceById(id);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+
+    if (invoice.status !== 'DRAFT' && invoice.status !== 'PENDING_REVIEW') {
+      throw new Error(`Cannot edit invoice in ${invoice.status} status`);
+    }
+
+    return this.repository.updateInvoice(id, input, userId);
+  }
+
+  /**
+   * Soft-delete an invoice; only allowed while still a draft.
+   */
+  async deleteInvoice(id: UUID, userId: UUID): Promise<void> {
+    const invoice = await this.repository.findInvoiceById(id);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+
+    if (invoice.status !== 'DRAFT') {
+      throw new Error(`Cannot delete invoice in ${invoice.status} status`);
+    }
+
+    await this.repository.deleteInvoice(id, userId);
+  }
+
+  /**
+   * Send invoice to payer; only allowed from DRAFT.
+   */
+  async sendInvoice(id: UUID, userId: UUID): Promise<Invoice> {
+    const invoice = await this.repository.findInvoiceById(id);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+
+    if (invoice.status !== 'DRAFT') {
+      throw new Error(`Cannot send invoice in ${invoice.status} status`);
+    }
+
+    return this.repository.updateInvoice(
+      id,
+      { status: 'SENT', submittedDate: new Date(), submittedBy: userId },
+      userId
+    );
+  }
+
+  /**
+   * Void an invoice; disallowed once PAID or already VOIDED.
+   */
+  async voidInvoice(id: UUID, userId: UUID): Promise<Invoice> {
+    const invoice = await this.repository.findInvoiceById(id);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+
+    if (invoice.status === 'PAID' || invoice.status === 'VOIDED') {
+      throw new Error(`Cannot void invoice in ${invoice.status} status`);
+    }
+
+    return this.repository.updateInvoice(id, { status: 'VOIDED' }, userId);
+  }
+
+  /**
    * Create payment from payer
    */
   async createPayment(

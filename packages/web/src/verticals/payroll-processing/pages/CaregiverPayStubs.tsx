@@ -168,7 +168,7 @@ export const CaregiverPayStubs: React.FC = () => {
                   </div>
 
                   <div className="flex gap-2 ml-4">
-                    <Link to={`/caregiver/paystubs/${payStub.id}`}>
+                    <Link to={`/payroll/pay-stubs/${payStub.id}`}>
                       <Button
                         variant="outline"
                         size="sm"

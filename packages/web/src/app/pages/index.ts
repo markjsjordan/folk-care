@@ -3,7 +3,6 @@ export * from './Dashboard';
 export * from './FamilyDashboard';
 export * from './DashboardSelector';
 export * from './AdministratorDashboard';
-export * from './CoordinatorDashboard';
 export * from './CaregiverDashboard';
 export * from './NurseDashboard';
 export * from './ComplianceDashboard';

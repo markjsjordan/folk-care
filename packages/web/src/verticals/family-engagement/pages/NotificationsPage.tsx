@@ -6,10 +6,13 @@
 
 import React, { useState } from 'react';
 import { useUnreadNotifications, useFamilyMemberProfile } from '../hooks';
+import { useAuth } from '@/core/hooks';
 import { NotificationList, NotificationSettings } from '../components';
+import type { UUID } from '@folkcare/core/browser';
 
 export const NotificationsPage: React.FC = () => {
-  const familyMemberId = sessionStorage.getItem('familyMemberId') || null;
+  const { user } = useAuth();
+  const familyMemberId = user?.id as UUID | null;
   const [showSettings, setShowSettings] = useState(false);
 
   const { data: notifications, isLoading } = useUnreadNotifications(familyMemberId);

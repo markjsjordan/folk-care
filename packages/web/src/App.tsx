@@ -8,12 +8,12 @@ import { useAuth } from './core/hooks';
 import { ProtectedRoute, FamilyProtectedRoute, PublicRoute } from './core/components';
 import { AppShell } from './app/components';
 import { initAuthStorage } from './core/utils/auth-storage';
-import { AcceptInvite, Dashboard, DashboardSelector, Login, Logout, Signup, Onboarding, NotFound, AdministratorDashboard, Settings, MobileDemoPage, ComplianceDashboard } from './app/pages';
+import { AcceptInvite, Dashboard, DashboardSelector, Login, Logout, Signup, Onboarding, NotFound, AdministratorDashboard, Settings, MobileDemoPage, ComplianceDashboard, NurseDashboard, CaregiverDashboard } from './app/pages';
 import { ClientList, ClientDetail, ClientDashboard } from './verticals/client-demographics';
 import { CarePlanList, CarePlanDetail, TaskList } from './verticals/care-plans';
-import { CreateCarePlanPage, CreateFromTemplatePage, CustomizeTemplatePage } from './verticals/care-plans';
-import { EVVRecordList, EVVRecordDetail } from './verticals/time-tracking-evv';
-import { InvoiceList, InvoiceDetail } from './verticals/billing-invoicing';
+import { CreateCarePlanPage, CreateFromTemplatePage, CustomizeTemplatePage, EditCarePlanPage, CaregiverTasksPage, TaskDetailPage, ProgressNotesPage } from './verticals/care-plans';
+import { EVVRecordList, EVVRecordDetail, SubmissionTrackingDashboard } from './verticals/time-tracking-evv';
+import { InvoiceList, InvoiceDetail, InvoiceForm } from './verticals/billing-invoicing';
 import { PayrollDashboard, PayRunList, PayRunDetail } from './verticals/payroll-processing';
 import { OpenShiftList, OpenShiftDetail } from './verticals/shift-matching';
 import { VisitList, CalendarView } from './verticals/scheduling-visits';
@@ -25,8 +25,8 @@ import BulkNotificationsPage from './pages/coordinators/BulkNotificationsPage';
 import ClientIntakeWorkflow from './pages/clients/ClientIntakeWorkflow';
 import CaregiverTrainingDashboard from './pages/caregivers/CaregiverTrainingDashboard';
 import { AdminDashboard as AnalyticsAdminDashboard, CoordinatorDashboard, ReportsPage } from './app/pages/analytics';
-import { QADashboard, AuditsPage, AuditDetailPage, CorrectiveActionsPage } from './verticals/quality-assurance';
-import { CaregiverList } from './verticals/caregivers';
+import { QADashboard, AuditsPage, AuditDetailPage, CorrectiveActionsPage, CreateAuditPage } from './verticals/quality-assurance';
+import { CaregiverList, CreateCaregiverPage, CaregiverDetail } from './verticals/caregivers';
 import { PayrollReports, CaregiverPayStubs, PayStubList, PayStubDetail, PayPeriodManagement } from './verticals/payroll-processing';
 import { MatchAnalyticsDashboard } from './verticals/shift-matching';
 import { DemoModeBar } from './demo';
@@ -179,6 +179,16 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/nurse/dashboard"
+        element={
+          <ProtectedRoute requiredRoles={['NURSE', 'NURSE_RN', 'NURSE_LPN', 'CLINICAL']}>
+            <AppShell>
+              <NurseDashboard />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/clients/:id"
         element={
           <ProtectedRoute>
@@ -234,6 +244,26 @@ function AppRoutes() {
           <ProtectedRoute permission="caregivers:read">
             <AppShell>
               <CaregiverList />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/caregivers/new"
+        element={
+          <ProtectedRoute permission="caregivers:write">
+            <AppShell>
+              <CreateCaregiverPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/caregivers/:id"
+        element={
+          <ProtectedRoute permission="caregivers:read">
+            <AppShell>
+              <CaregiverDetail />
             </AppShell>
           </ProtectedRoute>
         }
@@ -359,11 +389,61 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/care-plans/:id/edit"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <EditCarePlanPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/care-plans/:id/progress-notes"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <ProgressNotesPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/tasks"
         element={
           <ProtectedRoute permission="tasks:read">
             <AppShell>
               <TaskList />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/caregiver/tasks"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <CaregiverTasksPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/caregiver/dashboard"
+        element={
+          <ProtectedRoute requiredRoles={['CAREGIVER']}>
+            <AppShell>
+              <CaregiverDashboard />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tasks/:id"
+        element={
+          <ProtectedRoute permission="tasks:read">
+            <AppShell>
+              <TaskDetailPage />
             </AppShell>
           </ProtectedRoute>
         }
@@ -389,6 +469,18 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/time-tracking/aggregator-submissions"
+        element={
+          <ProtectedRoute
+            requiredRoles={['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_ADMIN', 'ADMIN', 'COORDINATOR']}
+          >
+            <AppShell>
+              <SubmissionTrackingDashboard />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/billing"
         element={
           <ProtectedRoute permission="billing:read">
@@ -399,11 +491,31 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/billing/new"
+        element={
+          <ProtectedRoute permission="billing:write">
+            <AppShell>
+              <InvoiceForm />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/billing/:id"
         element={
           <ProtectedRoute>
             <AppShell>
               <InvoiceDetail />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/billing/:id/edit"
+        element={
+          <ProtectedRoute permission="billing:write">
+            <AppShell>
+              <InvoiceForm />
             </AppShell>
           </ProtectedRoute>
         }
@@ -560,6 +672,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppShell>
               <AuditsPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/quality-assurance/audits/new"
+        element={
+          <ProtectedRoute permission="audits:create">
+            <AppShell>
+              <CreateAuditPage />
             </AppShell>
           </ProtectedRoute>
         }

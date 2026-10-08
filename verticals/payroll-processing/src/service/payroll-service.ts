@@ -129,11 +129,25 @@ export class PayrollService {
     input: CreatePayPeriodInput,
     userId: UUID
   ): Promise<PayPeriod> {
+    // periodNumber/periodYear are required by the pay_periods table (unique
+    // per organization_id + period_year + period_number) but are not part
+    // of the public CreatePayPeriodInput contract (types/payroll.ts) that
+    // callers (e.g. the POST /payroll/periods route) are typed against.
+    // Derive periodYear from startDate and periodNumber as the next
+    // available number for that org/year when the caller doesn't supply
+    // them, so the route doesn't 500 with a not-null or unique constraint
+    // violation (calendar-math derivation can collide across period types
+    // covering overlapping ranges, e.g. BI_WEEKLY vs MONTHLY).
+    const startDate = new Date(input.startDate);
+    const periodYear = input.periodYear ?? startDate.getUTCFullYear();
+    const periodNumber =
+      input.periodNumber ?? (await this.nextPeriodNumber(input.organizationId, periodYear));
+
     const payPeriod: Omit<PayPeriod, 'id' | 'createdAt' | 'updatedAt' | 'version'> = {
       organizationId: input.organizationId,
       ...(input.branchId !== undefined && { branchId: input.branchId }),
-      periodNumber: input.periodNumber,
-      periodYear: input.periodYear,
+      periodNumber,
+      periodYear,
       periodType: input.periodType,
       startDate: input.startDate,
       endDate: input.endDate,
@@ -379,48 +393,11 @@ export class PayrollService {
       // Generate run number
       const runNumber = this.generateRunNumber(payPeriod.periodYear, payPeriod.periodNumber);
 
-      // Calculate pay stubs for each timesheet
-      const payStubIds: UUID[] = [];
-      let totalGrossPay = 0;
-      let totalNetPay = 0;
-      let totalDeductions = 0;
-      let totalTaxWithheld = 0;
-
-      for (const timesheet of timesheets) {
-        const payStub = await this.calculatePayStub(
-          timesheet,
-          payPeriod,
-          userId,
-          client
-        );
-        
-        payStubIds.push(payStub.id);
-        totalGrossPay += payStub.currentGrossPay;
-        totalNetPay += payStub.currentNetPay;
-        totalDeductions += payStub.totalOtherDeductions;
-        totalTaxWithheld += payStub.totalTaxWithheld;
-
-        // Update timesheet status to PROCESSING
-        const statusChange = {
-          id: uuid(),
-          fromStatus: 'APPROVED' as const,
-          toStatus: 'PROCESSING' as const,
-          timestamp: new Date(),
-          changedBy: userId,
-          reason: 'Included in pay run',
-        };
-
-        await this.repository.updateTimeSheet(
-          timesheet.id,
-          {
-            status: 'PROCESSING',
-            statusHistory: [...timesheet.statusHistory, statusChange],
-          }
-        );
-      }
-
-      // Create pay run
-      const payRun: Omit<PayRun, 'id' | 'createdAt' | 'updatedAt' | 'version'> = {
+      // Create the pay run FIRST (with placeholder totals/empty stub list) so
+      // its real id can be threaded into each pay stub's required, non-null
+      // pay_run_id column -- pay stubs cannot be created before the pay run
+      // they belong to exists.
+      const payRunDraft: Omit<PayRun, 'id' | 'createdAt' | 'updatedAt' | 'version'> = {
         organizationId: input.organizationId,
         ...(input.branchId !== undefined && { branchId: input.branchId }),
         payPeriodId: input.payPeriodId,
@@ -444,14 +421,14 @@ export class PayrollService {
         initiatedAt: new Date(),
         initiatedBy: userId,
         calculatedAt: new Date(),
-        payStubIds,
-        totalPayStubs: payStubIds.length,
+        payStubIds: [],
+        totalPayStubs: 0,
         totalCaregivers: timesheets.length,
         totalHours: timesheets.reduce((sum, ts) => sum + ts.totalHours, 0),
-        totalGrossPay,
-        totalDeductions,
-        totalTaxWithheld,
-        totalNetPay,
+        totalGrossPay: 0,
+        totalDeductions: 0,
+        totalTaxWithheld: 0,
+        totalNetPay: 0,
         federalIncomeTax: 0, // Would be calculated from pay stubs
         stateIncomeTax: 0,
         socialSecurityTax: 0,
@@ -473,7 +450,32 @@ export class PayrollService {
         updatedBy: userId,
       };
 
-      const createdPayRun = await this.repository.createPayRun(payRun, client);
+      const createdPayRun = await this.repository.createPayRun(payRunDraft, client);
+
+      // Now calculate pay stubs for each timesheet, with the real pay run id.
+      const {
+        payStubIds,
+        totalGrossPay,
+        totalNetPay,
+        totalDeductions,
+        totalTaxWithheld,
+      } = await this.calculatePayStubsForTimeSheets(
+        timesheets,
+        payPeriod,
+        userId,
+        client,
+        createdPayRun.id
+      );
+
+      // Backfill the pay run with the real stub references/aggregate totals.
+      const updatedPayRun = await this.repository.updatePayRun(createdPayRun.id, {
+        payStubIds,
+        totalPayStubs: payStubIds.length,
+        totalGrossPay,
+        totalDeductions,
+        totalTaxWithheld,
+        totalNetPay,
+      }, client);
 
       // Update pay period with pay run reference
       await this.repository.updatePayPeriod(
@@ -485,13 +487,74 @@ export class PayrollService {
       );
 
       await client.query('COMMIT');
-      return createdPayRun;
+      return updatedPayRun ?? createdPayRun;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Calculate pay stubs for a batch of approved timesheets, aggregating totals.
+   * Extracted from createPayRun so it can be reused by calculatePayRun (standalone
+   * recalculation of an existing pay run) without duplicating the per-timesheet logic.
+   */
+  private async calculatePayStubsForTimeSheets(
+    timesheets: TimeSheet[],
+    payPeriod: PayPeriod,
+    userId: UUID,
+    client?: PoolClient,
+    payRunId?: UUID
+  ): Promise<{
+    payStubIds: UUID[];
+    totalGrossPay: number;
+    totalNetPay: number;
+    totalDeductions: number;
+    totalTaxWithheld: number;
+  }> {
+    const payStubIds: UUID[] = [];
+    let totalGrossPay = 0;
+    let totalNetPay = 0;
+    let totalDeductions = 0;
+    let totalTaxWithheld = 0;
+
+    for (const timesheet of timesheets) {
+      const payStub = await this.calculatePayStub(
+        timesheet,
+        payPeriod,
+        userId,
+        client,
+        payRunId
+      );
+
+      payStubIds.push(payStub.id);
+      totalGrossPay += payStub.currentGrossPay;
+      totalNetPay += payStub.currentNetPay;
+      totalDeductions += payStub.totalOtherDeductions;
+      totalTaxWithheld += payStub.totalTaxWithheld;
+
+      // Update timesheet status to PROCESSING
+      const statusChange = {
+        id: uuid(),
+        fromStatus: 'APPROVED' as const,
+        toStatus: 'PROCESSING' as const,
+        timestamp: new Date(),
+        changedBy: userId,
+        reason: 'Included in pay run',
+      };
+
+      await this.repository.updateTimeSheet(
+        timesheet.id,
+        {
+          status: 'PROCESSING',
+          statusHistory: [...timesheet.statusHistory, statusChange],
+        }
+      );
+    }
+
+    return { payStubIds, totalGrossPay, totalNetPay, totalDeductions, totalTaxWithheld };
   }
 
   /**
@@ -502,7 +565,8 @@ export class PayrollService {
     timesheet: TimeSheet,
     payPeriod: PayPeriod,
     userId: UUID,
-    client?: PoolClient
+    client?: PoolClient,
+    payRunId?: UUID
   ): Promise<PayStub> {
     // Calculate gross pay
     const grossPay = timesheet.totalGrossPay;
@@ -598,7 +662,7 @@ export class PayrollService {
       organizationId: timesheet.organizationId,
       branchId: timesheet.branchId,
       payPeriodId: payPeriod.id,
-      payRunId: undefined!, // Will be set by caller
+      payRunId: payRunId as UUID, // Threaded through by caller; createPayRun now creates the pay run row before calculating stubs so this is always a real id.
       caregiverId: timesheet.caregiverId,
       caregiverName: timesheet.caregiverName,
       caregiverEmployeeId: timesheet.caregiverEmployeeId,
@@ -815,6 +879,18 @@ export class PayrollService {
   }
 
   /**
+   * Compute the next available period number for an organization/year,
+   * for callers that don't supply periodNumber explicitly (see
+   * createPayPeriod). Avoids unique constraint collisions across period
+   * types covering overlapping date ranges.
+   */
+  private async nextPeriodNumber(organizationId: UUID, periodYear: number): Promise<number> {
+    const existing = await this.repository.findPayPeriods({ organizationId, year: periodYear });
+    const maxNumber = existing.reduce((max, p) => Math.max(max, p.periodNumber), 0);
+    return maxNumber + 1;
+  }
+
+  /**
    * Generate pay stub number
    */
   private generateStubNumber(payPeriod: PayPeriod, caregiverId: UUID): string {
@@ -1024,6 +1100,84 @@ export class PayrollService {
   }
 
   /**
+   * Standalone recalculation of an existing pay run.
+   * Re-runs pay stub calculation for the pay run's pay period's approved
+   * timesheets and updates the pay run's stub references/aggregate totals.
+   * Only valid while the pay run has not progressed past CALCULATED
+   * (DRAFT, CALCULATING, or CALCULATED may be recalculated).
+   */
+  async calculatePayRun(payRunId: UUID, userId: UUID): Promise<PayRun> {
+    const payRun = await this.repository.findPayRunById(payRunId);
+    if (!payRun) {
+      throw new Error('Pay run not found');
+    }
+
+    if (
+      payRun.status !== 'DRAFT' &&
+      payRun.status !== 'CALCULATING' &&
+      payRun.status !== 'CALCULATED'
+    ) {
+      throw new Error(`Cannot calculate pay run in ${payRun.status} status`);
+    }
+
+    const payPeriod = await this.repository.findPayPeriodById(payRun.payPeriodId);
+    if (!payPeriod) {
+      throw new Error('Pay period not found');
+    }
+
+    const timesheets = await this.repository.findTimeSheets({
+      organizationId: payRun.organizationId,
+      payPeriodId: payRun.payPeriodId,
+      status: ['APPROVED'],
+    });
+
+    if (timesheets.length === 0) {
+      throw new Error('No approved timesheets found for this pay period');
+    }
+
+    const {
+      payStubIds,
+      totalGrossPay,
+      totalNetPay,
+      totalDeductions,
+      totalTaxWithheld,
+    } = await this.calculatePayStubsForTimeSheets(timesheets, payPeriod, userId);
+
+    const statusChange = {
+      id: uuid(),
+      fromStatus: payRun.status,
+      toStatus: 'CALCULATED' as const,
+      timestamp: new Date(),
+      changedBy: userId,
+      automatic: false,
+      reason: 'Pay run calculated',
+    };
+
+    const updatedPayRun = await this.repository.updatePayRun(
+      payRunId,
+      {
+        status: 'CALCULATED',
+        statusHistory: [...payRun.statusHistory, statusChange],
+        calculatedAt: new Date(),
+        payStubIds,
+        totalPayStubs: payStubIds.length,
+        totalCaregivers: timesheets.length,
+        totalHours: timesheets.reduce((sum, ts) => sum + ts.totalHours, 0),
+        totalGrossPay,
+        totalDeductions,
+        totalTaxWithheld,
+        totalNetPay,
+      }
+    );
+
+    if (!updatedPayRun) {
+      throw new Error('Pay run not found');
+    }
+
+    return updatedPayRun;
+  }
+
+  /**
    * Approve pay run for payment processing
    */
   async approvePayRun(payRunId: UUID, userId: UUID): Promise<void> {
@@ -1059,6 +1213,48 @@ export class PayrollService {
         approvedBy: userId,
       }
     );
+  }
+
+  /**
+   * Process an APPROVED pay run, transitioning it to its terminal PROCESSED
+   * status (payments generated). Distinct from approvePayRun, which only
+   * performs the CALCULATED/PENDING_APPROVAL -> APPROVED transition.
+   */
+  async processPayRun(payRunId: UUID, userId: UUID): Promise<PayRun> {
+    const payRun = await this.repository.findPayRunById(payRunId);
+    if (!payRun) {
+      throw new Error('Pay run not found');
+    }
+
+    if (payRun.status !== 'APPROVED') {
+      throw new Error(`Cannot process pay run in ${payRun.status} status`);
+    }
+
+    const statusChange = {
+      id: uuid(),
+      fromStatus: payRun.status,
+      toStatus: 'PROCESSED' as const,
+      timestamp: new Date(),
+      changedBy: userId,
+      automatic: false,
+      reason: 'Pay run processed and payments generated',
+    };
+
+    const updatedPayRun = await this.repository.updatePayRun(
+      payRunId,
+      {
+        status: 'PROCESSED',
+        statusHistory: [...payRun.statusHistory, statusChange],
+        processedAt: new Date(),
+        processedBy: userId,
+      }
+    );
+
+    if (!updatedPayRun) {
+      throw new Error('Pay run not found');
+    }
+
+    return updatedPayRun;
   }
 
   /**
@@ -1118,6 +1314,37 @@ export class PayrollService {
       payPeriodId,
       {
         status: 'LOCKED',
+        statusHistory: [...payPeriod.statusHistory, statusChange],
+      }
+    );
+  }
+
+  /**
+   * Unlock pay period, reverting it to OPEN so timesheets can be changed again
+   */
+  async unlockPayPeriod(payPeriodId: UUID, userId: UUID): Promise<void> {
+    const payPeriod = await this.repository.findPayPeriodById(payPeriodId);
+    if (!payPeriod) {
+      throw new Error('Pay period not found');
+    }
+
+    if (payPeriod.status !== 'LOCKED') {
+      throw new Error(`Cannot unlock pay period in ${payPeriod.status} status`);
+    }
+
+    const statusChange = {
+      id: uuid(),
+      fromStatus: 'LOCKED' as const,
+      toStatus: 'OPEN' as const,
+      timestamp: new Date(),
+      changedBy: userId,
+      reason: 'Pay period unlocked for further timesheet changes',
+    };
+
+    await this.repository.updatePayPeriod(
+      payPeriodId,
+      {
+        status: 'OPEN',
         statusHistory: [...payPeriod.statusHistory, statusChange],
       }
     );

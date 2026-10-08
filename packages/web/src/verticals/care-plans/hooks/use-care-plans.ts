@@ -11,6 +11,7 @@ import type {
   CompleteTaskInput,
 } from '../types';
 import type { SearchParams } from '@/core/types';
+import type { CreateProgressNoteInput } from '../services/care-plan-api-service';
 
 export const useCarePlanApi = () => {
   const apiClient = useApiClient();
@@ -122,6 +123,33 @@ export const useCompleteTask = () => {
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to complete task');
+    },
+  });
+};
+
+export const useProgressNotes = (carePlanId: string | undefined) => {
+  const carePlanApi = useCarePlanApi();
+
+  return useQuery({
+    queryKey: ['progress-notes', carePlanId],
+    queryFn: () => carePlanApi.getProgressNotes(carePlanId!),
+    enabled: !!carePlanId,
+  });
+};
+
+export const useCreateProgressNote = () => {
+  const carePlanApi = useCarePlanApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateProgressNoteInput) => carePlanApi.createProgressNote(input),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['progress-notes', data.carePlanId] });
+      queryClient.invalidateQueries({ queryKey: ['care-plans', data.carePlanId] });
+      toast.success('Progress note added successfully');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to add progress note');
     },
   });
 };

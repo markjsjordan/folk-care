@@ -123,7 +123,7 @@ export class EVVRepository {
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
         $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-        $31, $32, $33, $34, $35, $36, $37
+        $31, $32, $33, $34, $35, $36, $37, $38
       )
       RETURNING *
     `;
@@ -207,8 +207,9 @@ export class EVVRepository {
       if (key !== 'id' && key !== 'createdAt' && key !== 'createdBy') {
         const dbKey = this.camelToSnake(key);
 
-        // Handle JSON fields
-        if (typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date)) {
+        // Handle JSON fields (jsonb columns store both objects and arrays
+        // as JSON text — only Date instances should bypass stringification)
+        if (typeof value === 'object' && value !== null && !(value instanceof Date)) {
           fields.push(`${dbKey} = $${paramIndex}`);
           values.push(JSON.stringify(value));
         } else {
@@ -484,8 +485,9 @@ export class EVVRepository {
       if (key !== 'id' && key !== 'createdAt' && key !== 'createdBy' && key !== 'version') {
         const dbKey = this.camelToSnake(key);
 
-        // Handle JSON fields
-        if (typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date)) {
+        // Handle JSON fields (jsonb columns store both objects and arrays
+        // as JSON text — only Date instances should bypass stringification)
+        if (typeof value === 'object' && value !== null && !(value instanceof Date)) {
           fields.push(`${dbKey} = $${paramIndex}`);
           values.push(JSON.stringify(value));
         } else {
@@ -705,9 +707,9 @@ export class EVVRepository {
       exceptionEvents: row.exception_events ? this.parseJsonField(row.exception_events) : undefined,
       submittedToPayor: row.submitted_to_payor,
       payorApprovalStatus: row.payor_approval_status as PayorApprovalStatus,
-      stateSpecificData: row.state_specific_data ? JSON.parse(row.state_specific_data) : undefined,
-      caregiverAttestation: row.caregiver_attestation ? JSON.parse(row.caregiver_attestation) : undefined,
-      clientAttestation: row.client_attestation ? JSON.parse(row.client_attestation) : undefined,
+      stateSpecificData: row.state_specific_data ? this.parseJsonField(row.state_specific_data) : undefined,
+      caregiverAttestation: row.caregiver_attestation ? this.parseJsonField(row.caregiver_attestation) : undefined,
+      clientAttestation: row.client_attestation ? this.parseJsonField(row.client_attestation) : undefined,
       supervisorReview: row.supervisor_review ? this.parseJsonField(row.supervisor_review) : undefined,
     };
 
@@ -732,7 +734,7 @@ export class EVVRepository {
       radiusMeters: row.radius_meters,
       radiusType: row.radius_type,
       shape: row.shape,
-      polygonPoints: row.polygon_points ? JSON.parse(row.polygon_points) : undefined,
+      polygonPoints: row.polygon_points ? this.parseJsonField(row.polygon_points) : undefined,
       isActive: row.is_active,
       allowedVariance: row.allowed_variance,
       calibratedAt: row.calibrated_at,
@@ -766,12 +768,12 @@ export class EVVRepository {
       // Entry details
       entryType: row.entry_type as TimeEntry['entryType'],
       entryTimestamp: row.entry_timestamp,
-      location: JSON.parse(row.location),
+      location: this.parseJsonField(row.location),
       deviceId: row.device_id,
-      deviceInfo: JSON.parse(row.device_info),
+      deviceInfo: this.parseJsonField(row.device_info),
       integrityHash: row.integrity_hash,
       serverReceivedAt: row.server_received_at,
-      syncMetadata: JSON.parse(row.sync_metadata),
+      syncMetadata: this.parseJsonField(row.sync_metadata),
       offlineRecorded: row.offline_recorded,
       
       // Status
@@ -787,15 +789,15 @@ export class EVVRepository {
     const optionalFields = {
       evvRecordId: row.evv_record_id,
       offlineRecordedAt: row.offline_recorded_at,
-      verificationIssues: row.verification_issues ? JSON.parse(row.verification_issues) : undefined,
-      manualOverride: row.manual_override ? JSON.parse(row.manual_override) : undefined,
+      verificationIssues: row.verification_issues ? this.parseJsonField(row.verification_issues) : undefined,
+      manualOverride: row.manual_override ? this.parseJsonField(row.manual_override) : undefined,
     };
 
     const filteredOptional = Object.fromEntries(
       Object.entries(optionalFields).filter(([_, value]) => value !== undefined && value !== null)
     );
 
-    return { ...baseEntry, ...filteredOptional } as TimeEntry;
+    return { ...baseEntry, ...filteredOptional } as unknown as TimeEntry;
   }
 
   /**

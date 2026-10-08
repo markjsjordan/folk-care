@@ -7,7 +7,9 @@
 import React, { useState } from 'react';
 import type { ActivityType } from '@folkcare/family-engagement';
 import { useRecentActivity } from '../hooks';
+import { useAuth } from '@/core/hooks';
 import { ActivityFeed, ActivityFilters } from '../components';
+import type { UUID } from '@folkcare/core/browser';
 
 // Calculate default date range outside component to avoid impure function during render
 const getDefaultDateRange = () => ({
@@ -16,7 +18,8 @@ const getDefaultDateRange = () => ({
 });
 
 export const ActivityPage: React.FC = () => {
-  const familyMemberId = sessionStorage.getItem('familyMemberId') ?? null;
+  const { user } = useAuth();
+  const familyMemberId = user?.id as UUID | null;
 
   const [selectedTypes, setSelectedTypes] = useState<ActivityType[]>([]);
   const [dateRange, setDateRange] = useState(getDefaultDateRange);

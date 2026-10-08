@@ -4,3 +4,5 @@ export * from './PayrollSummaryCard';
 export * from './PayStubCard';
 export * from './TaxSummary';
 export * from './DeductionsList';
+export * from './CreatePayPeriodModal';
+export * from './CreatePayRunModal';

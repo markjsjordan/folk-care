@@ -34,6 +34,8 @@ export interface EmergencyContact {
 
 export interface Client {
   id: string;
+  organizationId: string;
+  branchId: string;
   clientNumber: string;
   firstName: string;
   middleName?: string;
@@ -56,6 +58,8 @@ export interface Client {
 }
 
 export interface CreateClientInput {
+  organizationId: string;
+  branchId: string;
   firstName: string;
   middleName?: string;
   lastName: string;

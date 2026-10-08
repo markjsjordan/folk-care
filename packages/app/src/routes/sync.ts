@@ -20,12 +20,12 @@ export function createSyncRouter(db: Database): Router {
 
   router.get('/sync/changes', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (req.userContext === undefined) {
+      if (req.user === undefined) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
         return;
       }
       
-      const userId = req.userContext.userId;
+      const userId = req.user.userId;
       const { lastPulledAt } = req.query;
 
       if (typeof lastPulledAt !== 'string') {
@@ -72,13 +72,13 @@ export function createSyncRouter(db: Database): Router {
 
   router.post('/sync/push', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (req.userContext === undefined) {
+      if (req.user === undefined) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
         return;
       }
       
-      const userId = req.userContext.userId;
-      const organizationId = req.userContext.organizationId;
+      const userId = req.user.userId;
+      const organizationId = req.user.organizationId;
       const { changes, deviceId } = req.body;
 
       if (changes === undefined || changes === null || !Array.isArray(changes)) {
@@ -156,12 +156,12 @@ export function createSyncRouter(db: Database): Router {
 
   router.get('/sync/status/:deviceId', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (req.userContext === undefined) {
+      if (req.user === undefined) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
         return;
       }
       
-      const userId = req.userContext.userId;
+      const userId = req.user.userId;
       const { deviceId } = req.params;
 
       const result = await db.query(
@@ -212,12 +212,12 @@ export function createSyncRouter(db: Database): Router {
 
   router.post('/sync/heartbeat', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (req.userContext === undefined) {
+      if (req.user === undefined) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
         return;
       }
       
-      const userId = req.userContext.userId;
+      const userId = req.user.userId;
       const { deviceId } = req.body;
 
       if (deviceId === undefined || deviceId === null) {

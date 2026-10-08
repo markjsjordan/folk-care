@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Plus, Grid, List } from 'lucide-react';
 import { Button, LoadingSpinner, EmptyState, ErrorMessage } from '@/core/components';
 import { usePermissions } from '@/core/hooks';
 import { usePayRuns, usePayrollSummary } from '../hooks';
-import { PayRunCard, PayRunSearch, PayrollSummaryCard } from '../components';
+import { PayRunCard, PayRunSearch, PayrollSummaryCard, CreatePayRunModal } from '../components';
 import type { PayRunSearchFilters } from '../types';
 
 export const PayRunList: React.FC = () => {
   const { can } = usePermissions();
   const [filters, setFilters] = useState<PayRunSearchFilters>({});
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isCreateRunOpen, setIsCreateRunOpen] = useState(false);
   const { data: payRunData, isLoading, error, refetch } = usePayRuns(filters);
-  const { data: summary } = usePayrollSummary();
+  const { data: summary, isLoading: isSummaryLoading, error: summaryError, refetch: refetchSummary } = usePayrollSummary();
 
   if (isLoading) {
     return (
@@ -64,16 +64,31 @@ export const PayRunList: React.FC = () => {
             </button>
           </div>
           {can('payroll:write') && (
-            <Link to="/payroll/runs/new">
-              <Button leftIcon={<Plus className="h-4 w-4" />}>
-                New Pay Run
-              </Button>
-            </Link>
+            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setIsCreateRunOpen(true)}>
+              New Pay Run
+            </Button>
           )}
         </div>
       </div>
 
-      {summary && <PayrollSummaryCard summary={summary} />}
+      <CreatePayRunModal
+        isOpen={isCreateRunOpen}
+        onClose={() => setIsCreateRunOpen(false)}
+        onCreated={() => { void refetch(); }}
+      />
+
+      {isSummaryLoading ? (
+        <div className="flex justify-center items-center py-6">
+          <LoadingSpinner size="md" />
+        </div>
+      ) : summaryError ? (
+        <ErrorMessage
+          message={(summaryError as Error).message || 'Failed to load payroll summary'}
+          retry={refetchSummary}
+        />
+      ) : summary ? (
+        <PayrollSummaryCard summary={summary} />
+      ) : null}
 
       <PayRunSearch filters={filters} onFiltersChange={setFilters} />
 
@@ -83,11 +98,9 @@ export const PayRunList: React.FC = () => {
           description="Get started by creating your first pay run."
           action={
             can('payroll:write') ? (
-              <Link to="/payroll/runs/new">
-                <Button leftIcon={<Plus className="h-4 w-4" />}>
-                  Create Pay Run
-                </Button>
-              </Link>
+              <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setIsCreateRunOpen(true)}>
+                Create Pay Run
+              </Button>
             ) : undefined
           }
         />

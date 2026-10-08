@@ -1,0 +1,16 @@
+<testsuites id="" name="" tests="3" failures="0" skipped="1" errors="0" time="8.84455">
+<testsuite name="payroll-period-and-run.spec.ts" timestamp="2026-10-07T16:39:10.174Z" hostname="chromium" tests="3" failures="0" skipped="1" time="7.853" errors="0">
+<testcase name="FC-AUDIT-BILLING-PAYROLL-EVV: payroll period and run lifecycle › Create Pay Period opens a DRAFT period and immediately transitions it to OPEN" classname="payroll-period-and-run.spec.ts" time="5.337">
+</testcase>
+<testcase name="FC-AUDIT-BILLING-PAYROLL-EVV: payroll period and run lifecycle › Create Pay Run modal opens from the dashboard&apos;s Run Payroll action" classname="payroll-period-and-run.spec.ts" time="1.136">
+</testcase>
+<testcase name="FC-AUDIT-BILLING-PAYROLL-EVV: payroll period and run lifecycle › calculate/process a pay run and verify pay stubs, when an approved-timesheet pay run exists" classname="payroll-period-and-run.spec.ts" time="1.38">
+<properties>
+<property name="skip" value="No pay run with compiled timesheets available in this environment (compileTimeSheet has a pre-existing, out-of-scope repository bug blocking test data setup — see file header)">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+</testsuites>

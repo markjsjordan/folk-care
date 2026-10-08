@@ -1,4 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import { useCaregivers } from '@/verticals/caregivers/hooks/useCaregivers';
+import { useCalendarVisits, useVisitApi } from '@/verticals/scheduling-visits/hooks/useVisits';
+import type { Visit as ApiVisit } from '@/verticals/scheduling-visits/types';
 
 interface Caregiver {
   id: string;
@@ -27,82 +32,104 @@ interface TimeSlot {
   hour: number;
 }
 
-const DEMO_CAREGIVERS: Caregiver[] = [
-  {
-    id: 'cg-1',
-    name: 'Maria Garcia',
-    color: '#3b82f6',
-    skills: ['medication', 'mobility', 'meal-prep'],
-    availability: { '2025-12-09': true, '2025-12-10': true, '2025-12-11': true },
-  },
-  {
-    id: 'cg-2',
-    name: 'James Wilson',
-    color: '#10b981',
-    skills: ['wound-care', 'mobility', 'bathing'],
-    availability: { '2025-12-09': true, '2025-12-10': false, '2025-12-11': true },
-  },
-  {
-    id: 'cg-3',
-    name: 'Sarah Chen',
-    color: '#f59e0b',
-    skills: ['medication', 'meal-prep', 'transportation'],
-    availability: { '2025-12-09': true, '2025-12-10': true, '2025-12-11': true },
-  },
-];
-
-const DEMO_VISITS: Visit[] = [
-  {
-    id: 'v-1',
-    clientId: 'cl-1',
-    clientName: 'Robert Johnson',
-    caregiverId: 'cg-1',
-    caregiverName: 'Maria Garcia',
-    date: '2025-12-09',
-    startTime: '09:00',
-    endTime: '11:00',
-    duration: 2,
-    tasks: ['Medication assistance', 'Mobility support'],
-    status: 'assigned',
-  },
-  {
-    id: 'v-2',
-    clientId: 'cl-2',
-    clientName: 'Patricia Williams',
-    caregiverId: null,
-    caregiverName: null,
-    date: '2025-12-09',
-    startTime: '14:00',
-    endTime: '16:00',
-    duration: 2,
-    tasks: ['Wound care', 'Bathing assistance'],
-    status: 'unassigned',
-  },
-  {
-    id: 'v-3',
-    clientId: 'cl-3',
-    clientName: 'Michael Davis',
-    caregiverId: 'cg-3',
-    caregiverName: 'Sarah Chen',
-    date: '2025-12-10',
-    startTime: '10:00',
-    endTime: '12:00',
-    duration: 2,
-    tasks: ['Meal preparation', 'Medication assistance'],
-    status: 'confirmed',
-  },
-];
+const CAREGIVER_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
 
 const TIME_SLOTS: TimeSlot[] = Array.from({ length: 14 }, (_, i) => ({
   time: `${String(i + 7).padStart(2, '0')}:00`,
   hour: i + 7,
 }));
 
+/** Map a real caregiver list item to this page's display shape. Availability
+ * isn't modeled by the caregiver API, so caregivers are treated as available
+ * on every date here; the time-slot grid still prevents double-booking via
+ * getVisitsForCaregiverAtTime. */
+function toDisplayCaregiver(
+  cg: { id: string; firstName: string; lastName: string; role: string },
+  index: number
+): Caregiver {
+  return {
+    id: cg.id,
+    name: `${cg.firstName} ${cg.lastName}`,
+    color: CAREGIVER_COLORS[index % CAREGIVER_COLORS.length]!,
+    skills: [cg.role],
+    availability: {},
+  };
+}
+
+/** Map a real API Visit to this page's display shape. */
+function toDisplayVisit(v: ApiVisit, caregiverNameById: Map<string, string>): Visit {
+  const scheduledDate = typeof v.scheduledDate === 'string' ? v.scheduledDate : v.scheduledDate.toISOString();
+  const dateStr = scheduledDate.split('T')[0] ?? scheduledDate;
+  const clientName = v.clientFirstName != null && v.clientLastName != null
+    ? `${v.clientFirstName} ${v.clientLastName}`
+    : 'Unknown Client';
+
+  let status: Visit['status'] = 'unassigned';
+  if (v.status === 'CONFIRMED') status = 'confirmed';
+  else if (v.assignedCaregiverId != null) status = 'assigned';
+
+  return {
+    id: v.id,
+    clientId: v.clientId,
+    clientName,
+    caregiverId: v.assignedCaregiverId ?? null,
+    caregiverName: v.assignedCaregiverId != null ? caregiverNameById.get(v.assignedCaregiverId) ?? null : null,
+    date: dateStr,
+    startTime: v.scheduledStartTime,
+    endTime: v.scheduledEndTime,
+    duration: Math.round(v.scheduledDuration / 60),
+    tasks: [],
+    status,
+  };
+}
+
+function getNextWeekDates(): string[] {
+  const dates: string[] = [];
+  const today = new Date();
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    const dateStr = date.toISOString().split('T')[0];
+    if (dateStr) dates.push(dateStr);
+  }
+  return dates;
+}
+
 export default function ScheduleBuilderPage() {
-  const [selectedDate, setSelectedDate] = useState<string>('2025-12-09');
-  const [visits, setVisits] = useState<Visit[]>(DEMO_VISITS);
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]!);
   const [draggedVisit, setDraggedVisit] = useState<Visit | null>(null);
   const [viewMode, setViewMode] = useState<'week' | 'day'>('day');
+
+  const queryClient = useQueryClient();
+  const visitApi = useVisitApi();
+
+  const weekDates = useMemo(() => getNextWeekDates(), []);
+
+  const { data: caregiversResult } = useCaregivers({}, 1, 100);
+  const caregivers: Caregiver[] = useMemo(
+    () => (caregiversResult?.items ?? []).map((cg, i) => toDisplayCaregiver(cg, i)),
+    [caregiversResult]
+  );
+  const caregiverNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const cg of caregivers) map.set(cg.id, cg.name);
+    return map;
+  }, [caregivers]);
+
+  // Use a full week range so the week/day toggle and date selector both have data
+  const rangeStart = useMemo(() => new Date(weekDates[0] ?? selectedDate), [weekDates, selectedDate]);
+  const rangeEnd = useMemo(() => {
+    const end = new Date(weekDates[weekDates.length - 1] ?? selectedDate);
+    end.setHours(23, 59, 59, 999);
+    return end;
+  }, [weekDates, selectedDate]);
+
+  const { data: apiVisits = [], refetch: refetchVisits } = useCalendarVisits(rangeStart, rangeEnd);
+
+  const visits: Visit[] = useMemo(
+    () => apiVisits.map(v => toDisplayVisit(v, caregiverNameById)),
+    [apiVisits, caregiverNameById]
+  );
 
   const unassignedVisits = useMemo(
     () => visits.filter(v => v.status === 'unassigned' && v.date === selectedDate),
@@ -117,37 +144,33 @@ export default function ScheduleBuilderPage() {
     e.preventDefault();
   };
 
-  const handleDrop = (caregiverId: string, timeSlot: string) => {
+  const handleDrop = useCallback(async (caregiverId: string) => {
     if (!draggedVisit) return;
 
-    const [hours] = timeSlot.split(':').map(Number);
-    const endHour = (hours ?? 0) + draggedVisit.duration;
-    const endTime = `${String(endHour).padStart(2, '0')}:00`;
+    try {
+      await visitApi.assignCaregiver(draggedVisit.id, caregiverId, false);
+      toast.success('Caregiver assigned successfully');
+      await queryClient.invalidateQueries({ queryKey: ['visits'] });
+      await refetchVisits();
+    } catch (error) {
+      console.error('Error assigning caregiver:', error);
+      toast.error('Failed to assign caregiver');
+    } finally {
+      setDraggedVisit(null);
+    }
+  }, [draggedVisit, visitApi, queryClient, refetchVisits]);
 
-    const updatedVisit: Visit = {
-      ...draggedVisit,
-      caregiverId,
-      caregiverName: DEMO_CAREGIVERS.find(cg => cg.id === caregiverId)?.name || null,
-      startTime: timeSlot,
-      endTime,
-      status: 'assigned',
-    };
-
-    setVisits(prev =>
-      prev.map(v => (v.id === draggedVisit.id ? updatedVisit : v))
-    );
-    setDraggedVisit(null);
-  };
-
-  const handleUnassign = (visitId: string) => {
-    setVisits(prev =>
-      prev.map(v =>
-        v.id === visitId
-          ? { ...v, caregiverId: null, caregiverName: null, status: 'unassigned' as const }
-          : v
-      )
-    );
-  };
+  // INCOMPLETE: visitApi has no dedicated "unassign" endpoint and
+  // assignCaregiver requires a non-null caregiverId (see
+  // packages/web/src/verticals/scheduling-visits/services/visit-api.ts and
+  // the backend PUT /api/visits/:id/assign handler, which does not accept a
+  // null/empty caregiverId to clear an assignment). There is no other
+  // visits.ts route that clears an assignment either. Flagging as the
+  // closest working equivalent is not available without new backend work;
+  // surfacing a clear error instead of silently failing or faking success.
+  const handleUnassign = useCallback((_visitId: string) => {
+    toast.error('Unassigning a visit is not supported by the API yet (no unassign endpoint exists).');
+  }, []);
 
   const getVisitsForCaregiverAtTime = (caregiverId: string, hour: number) => {
     return visits.filter(v => {
@@ -158,24 +181,9 @@ export default function ScheduleBuilderPage() {
     });
   };
 
-  const getCaregiverAvailability = (caregiverId: string) => {
-    const caregiver = DEMO_CAREGIVERS.find(cg => cg.id === caregiverId);
-    return caregiver?.availability[selectedDate] ?? false;
-  };
-
-  const getNextWeekDates = (): string[] => {
-    const dates: string[] = [];
-    const today = new Date('2025-12-09');
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      const dateStr = date.toISOString().split('T')[0];
-      if (dateStr) dates.push(dateStr);
-    }
-    return dates;
-  };
-
-  const weekDates = getNextWeekDates();
+  // Availability data isn't modeled by the caregiver API; treat all caregivers
+  // as available. Occupied slots are still computed from real visit data.
+  const getCaregiverAvailability = (_caregiverId: string) => true;
 
   return (
     <div style={styles.container}>
@@ -274,7 +282,7 @@ export default function ScheduleBuilderPage() {
               ))}
             </div>
 
-            {DEMO_CAREGIVERS.map(caregiver => {
+            {caregivers.map(caregiver => {
               const isAvailable = getCaregiverAvailability(caregiver.id);
               return (
                 <div key={caregiver.id} style={styles.caregiverColumn}>
@@ -321,7 +329,7 @@ export default function ScheduleBuilderPage() {
                         onDragOver={isAvailable && !isOccupied ? handleDragOver : undefined}
                         onDrop={
                           isAvailable && !isOccupied
-                            ? () => handleDrop(caregiver.id, slot.time)
+                            ? () => { void handleDrop(caregiver.id); }
                             : undefined
                         }
                       >

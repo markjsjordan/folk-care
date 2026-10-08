@@ -6,6 +6,7 @@
 
 import { Request, Response } from 'express';
 import { CarePlanService } from '../service/care-plan-service';
+import { TemplateService, CreateFromTemplateOptions } from '../service/template.service';
 import { UserContext, Role, ValidationError, PermissionError, NotFoundError } from '@folkcare/core';
 import { CarePlanStatus, CarePlanType, TaskStatus, TaskCategory, CarePlanSearchFilters, TaskInstanceSearchFilters } from '../types/care-plan';
 
@@ -73,7 +74,7 @@ function getUserContext(req: Request): UserContext {
 /**
  * Create API handlers for care plans
  */
-export function createCarePlanHandlers(service: CarePlanService) {
+export function createCarePlanHandlers(service: CarePlanService, templateService?: TemplateService) {
   return {
     /**
      * @openapi
@@ -586,6 +587,59 @@ export function createCarePlanHandlers(service: CarePlanService) {
         res.json(notes);
       } catch (error: unknown) {
         handleError(error, res, 'fetching progress notes');
+      }
+    },
+
+    /**
+     * POST /care-plans/from-template
+     * Create a care plan from a template
+     */
+    async createCarePlanFromTemplate(req: Request, res: Response) {
+      try {
+        if (!templateService) {
+          res.status(500).json({ error: 'Template service not configured' });
+          return;
+        }
+
+        const context = getUserContext(req);
+        if (!context.organizationId) {
+          res.status(400).json({ error: 'Organization context is required' });
+          return;
+        }
+
+        const { templateId, clientId, name, goals, notes, tasks, startDate, endDate, coordinatorId, branchId } = req.body;
+
+        if (!templateId || !clientId) {
+          res.status(400).json({ error: 'templateId and clientId are required' });
+          return;
+        }
+
+        // CustomizeTemplatePage.tsx sends camelCase startDate/endDate, but
+        // CreateFromTemplateOptions expects snake_case start_date/end_date.
+        // Map them here or date overrides will silently be dropped.
+        const customizations: CreateFromTemplateOptions = {
+          name,
+          goals,
+          notes,
+          tasks,
+          coordinatorId,
+          branchId,
+          start_date: startDate ? new Date(startDate) : undefined,
+          end_date: endDate ? new Date(endDate) : undefined,
+        };
+
+        // Use context.organizationId (from the authenticated user), never
+        // req.body, to avoid a cross-org data leak.
+        const carePlan = await templateService.createFromTemplate(
+          templateId,
+          clientId,
+          context.organizationId,
+          context,
+          customizations
+        );
+        res.status(201).json(carePlan);
+      } catch (error: unknown) {
+        handleError(error, res, 'creating care plan from template');
       }
     },
 

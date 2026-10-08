@@ -732,15 +732,79 @@ export class BillingRepository {
       conditions.push(`balance_due > 0`);
     }
 
+    // Clamp limit/offset to sane bounds: default 1000 (prior hardcoded cap)
+    // when no limit is requested, max 1000 per page, offset never negative.
+    const rawLimit = filters.limit;
+    const limit = rawLimit !== undefined && rawLimit > 0 ? Math.min(rawLimit, 1000) : 1000;
+    const rawOffset = filters.offset;
+    const offset = rawOffset !== undefined && rawOffset > 0 ? rawOffset : 0;
+
+    const limitParamIndex = paramCount++;
+    const offsetParamIndex = paramCount++;
+    params.push(limit, offset);
+
     const query = `
       SELECT * FROM invoices
       WHERE ${conditions.join(' AND ')}
       ORDER BY invoice_date DESC
-      LIMIT 1000
+      LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}
     `;
 
     const result = await this.pool.query(query, params);
     return result.rows.map(this.mapInvoice);
+  }
+
+  /**
+   * Count invoices matching the same filters as searchInvoices (minus
+   * limit/offset) for pagination envelopes (`total`/`hasMore`).
+   */
+  async countInvoices(filters: InvoiceSearchFilters): Promise<number> {
+    const conditions: string[] = ['deleted_at IS NULL'];
+    const params: unknown[] = [];
+    let paramCount = 1;
+
+    if (filters.organizationId) {
+      conditions.push(`organization_id = $${paramCount++}`);
+      params.push(filters.organizationId);
+    }
+
+    if (filters.payerId) {
+      conditions.push(`payer_id = $${paramCount++}`);
+      params.push(filters.payerId);
+    }
+
+    if (filters.clientId) {
+      conditions.push(`client_id = $${paramCount++}`);
+      params.push(filters.clientId);
+    }
+
+    if (filters.status && filters.status.length > 0) {
+      conditions.push(`status = ANY($${paramCount++})`);
+      params.push(filters.status);
+    }
+
+    if (filters.startDate) {
+      conditions.push(`invoice_date >= $${paramCount++}`);
+      params.push(filters.startDate);
+    }
+
+    if (filters.endDate) {
+      conditions.push(`invoice_date <= $${paramCount++}`);
+      params.push(filters.endDate);
+    }
+
+    if (filters.isPastDue) {
+      conditions.push(`due_date < CURRENT_DATE`);
+      conditions.push(`balance_due > 0`);
+    }
+
+    if (filters.hasBalance) {
+      conditions.push(`balance_due > 0`);
+    }
+
+    const countQuery = `SELECT COUNT(*) as count FROM invoices WHERE ${conditions.join(' AND ')}`;
+    const result = await this.pool.query(countQuery, params);
+    return parseInt((result.rows[0]?.count as string) ?? '0', 10);
   }
 
   async updateInvoicePayment(
@@ -770,6 +834,83 @@ export class BillingRepository {
       WHERE id = $1
       `,
       [id, paymentAmount, JSON.stringify([paymentReference]), userId]
+    );
+  }
+
+  /**
+   * Update invoice with whitelisted fields (dynamic SET)
+   */
+  async updateInvoice(
+    id: UUID,
+    fields: Partial<Invoice>,
+    userId: UUID,
+    client?: PoolClient
+  ): Promise<Invoice> {
+    const db = client || this.pool;
+
+    const columnMap: Record<string, string> = {
+      status: 'status',
+      dueDate: 'due_date',
+      notes: 'notes',
+      taxAmount: 'tax_amount',
+      discountAmount: 'discount_amount',
+      statusHistory: 'status_history',
+      submittedDate: 'submitted_date',
+      submittedBy: 'submitted_by',
+    };
+
+    const setClauses: string[] = [];
+    const params: unknown[] = [id];
+    let paramCount = 2;
+
+    for (const [key, column] of Object.entries(columnMap)) {
+      if (key in fields) {
+        const value = (fields as Record<string, unknown>)[key];
+        if (key === 'statusHistory') {
+          setClauses.push(`${column} = $${paramCount++}::jsonb`);
+          params.push(JSON.stringify(value));
+        } else {
+          setClauses.push(`${column} = $${paramCount++}`);
+          params.push(value);
+        }
+      }
+    }
+
+    setClauses.push(`updated_by = $${paramCount++}`);
+    params.push(userId);
+    setClauses.push(`updated_at = NOW()`);
+    setClauses.push(`version = version + 1`);
+
+    // NOSONAR: setClauses contains only column names from the hardcoded
+    // columnMap whitelist above (never derived from request input), and all
+    // values are bound via $N placeholders in params -- no string
+    // interpolation of untrusted data. Safe dynamic SET, not an injection risk.
+    // eslint-disable-next-line sonarjs/sql-queries
+    const result = await db.query(
+      `
+      UPDATE invoices
+      SET ${setClauses.join(', ')}
+      WHERE id = $1 AND deleted_at IS NULL
+      RETURNING *
+      `,
+      params
+    );
+
+    return this.mapInvoice(result.rows[0]);
+  }
+
+  /**
+   * Soft delete an invoice. Does NOT hard-delete: billable_items has a
+   * foreign key to invoice_id.
+   */
+  async deleteInvoice(id: UUID, userId: UUID): Promise<void> {
+    await this.pool.query(
+      `
+      UPDATE invoices
+      SET deleted_at = NOW(), deleted_by = $2
+      WHERE id = $1
+      `,
+      [id, userId]
     );
   }
 

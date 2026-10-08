@@ -1091,6 +1091,10 @@ export interface InvoiceSearchFilters {
   endDate?: Date;
   isPastDue?: boolean;
   hasBalance?: boolean;
+  /** Max rows to return. Repository clamps to a sane range; see searchInvoices. */
+  limit?: number;
+  /** Rows to skip, for pagination alongside limit. */
+  offset?: number;
 }
 
 export interface PaymentSearchFilters {
