@@ -21,6 +21,8 @@ export interface ApiError {
 export interface RequestConfig {
   headers?: Record<string, string>;
   signal?: AbortSignal;
+  /** Parse the body as text (e.g. EDI or CSV downloads) instead of JSON. */
+  responseType?: 'json' | 'text';
 }
 
 export type SortDirection = 'asc' | 'desc';

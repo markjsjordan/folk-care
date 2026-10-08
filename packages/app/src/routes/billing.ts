@@ -13,6 +13,8 @@ import {
   InvoiceStatus,
   RevenueForecastingService,
   InvoicePdfGeneratorService,
+  EVVGateBlockedError,
+  type PayorTypeFilter,
 } from '@folkcare/billing-invoicing';
 import knex from 'knex';
 
@@ -28,7 +30,7 @@ function getKnexInstance(): ReturnType<typeof knex> {
 }
 
 function isInvoiceStatus(value: string): value is InvoiceStatus {
-  return ['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'SENT', 'SUBMITTED', 
+  return ['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'READY_TO_SUBMIT', 'SENT', 'SUBMITTED', 
           'PARTIALLY_PAID', 'PAID', 'PAST_DUE', 'DISPUTED', 'CANCELLED', 'VOIDED'].includes(value);
 }
 
@@ -329,7 +331,7 @@ export function createBillingRouter(db: Database): Router {
       const result = await billingService.sendInvoice(id, req.user!.userId);
       res.json(result);
     } catch (error) {
-      next(error);
+      handleBillingError(error, res, next);
     }
   });
 
@@ -426,6 +428,188 @@ export function createBillingRouter(db: Database): Router {
       res.status(201).json(result);
     } catch (error) {
       next(error);
+    }
+  });
+
+  const PAYOR_FILTERS: readonly PayorTypeFilter[] = ['ALL', 'MEDICAID_MCO', 'MEDICARE', 'PRIVATE_PAY', 'VA'];
+  const parsePayorFilter = (value: unknown): PayorTypeFilter =>
+    PAYOR_FILTERS.includes(value as PayorTypeFilter) ? (value as PayorTypeFilter) : 'ALL';
+
+  /** Map EVV gate rejections to 422 and missing invoices to 404; pass anything else on. */
+  const handleBillingError = (error: unknown, res: Response, next: NextFunction): void => {
+    if (error instanceof EVVGateBlockedError) {
+      res.status(422).json({
+        error: error.message,
+        code: 'EVV_GATE_BLOCKED',
+        missingElements: error.missingElements,
+        validationErrors: error.validationErrors,
+        regulatoryCitation: error.regulatoryCitation,
+      });
+      return;
+    }
+    if (error instanceof Error && error.message === 'Invoice not found') {
+      res.status(404).json({ error: 'Invoice not found' });
+      return;
+    }
+    next(error);
+  };
+
+  /**
+   * POST /api/billing/invoices/:id/ready-to-submit
+   * Transition invoice to READY_TO_SUBMIT. EVV evidence is read from evv_records;
+   * any request body is ignored so callers cannot vouch for their own visits.
+   */
+  router.post('/invoices/:id/ready-to-submit', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = req.user?.organizationId;
+      if (typeof organizationId !== 'string') {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      const { id } = req.params;
+      if (typeof id !== 'string' || id.length === 0) {
+        res.status(400).json({ error: 'Invoice ID is required' });
+        return;
+      }
+
+      const invoice = await billingRepo.findInvoiceById(id);
+      if (invoice?.organizationId !== organizationId) {
+        res.status(404).json({ error: 'Invoice not found' });
+        return;
+      }
+
+      res.json(await billingService.transitionInvoiceToReadyToSubmit(id, req.user!.userId));
+    } catch (error) {
+      handleBillingError(error, res, next);
+    }
+  });
+
+  /**
+   * POST /api/billing/batch/generate-invoices
+   * Invoice every READY billable item whose stored EVV passes the gate.
+   * Body: { payerId?: string, billableItemIds?: string[] }
+   */
+  router.post('/batch/generate-invoices', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = req.user?.organizationId;
+      if (typeof organizationId !== 'string') {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const body = (req.body ?? {}) as { payerId?: unknown; billableItemIds?: unknown };
+      const billableItemIds = Array.isArray(body.billableItemIds)
+        ? body.billableItemIds.filter((v): v is string => typeof v === 'string')
+        : undefined;
+
+      const result = await billingService.generateInvoicesForVerifiedVisits(
+        {
+          organizationId,
+          ...(typeof body.payerId === 'string' ? { payerId: body.payerId } : {}),
+          ...(billableItemIds !== undefined ? { billableItemIds } : {}),
+        },
+        req.user!.userId,
+        organizationId.slice(0, 8).toUpperCase()
+      );
+      res.status(201).json(result);
+    } catch (error) {
+      handleBillingError(error, res, next);
+    }
+  });
+
+  /**
+   * GET /api/billing/claims-queue?payor=&search=
+   * Claims queue with EVV_INCOMPLETE / VERIFIED_READY / BILLED / PAID / REJECTED badges.
+   */
+  router.get('/claims-queue', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = req.user?.organizationId;
+      if (typeof organizationId !== 'string') {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      res.json(
+        await billingService.getClaimsQueue(organizationId, {
+          payor: parsePayorFilter(req.query['payor']),
+          ...(typeof req.query['search'] === 'string' ? { search: req.query['search'] } : {}),
+        })
+      );
+    } catch (error) {
+      handleBillingError(error, res, next);
+    }
+  });
+
+  /**
+   * GET /api/billing/invoices/:id/export/837p
+   * ANSI X12 837P preview. 422 if any line fails the EVV gate.
+   */
+  router.get('/invoices/:id/export/837p', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = req.user?.organizationId;
+      if (typeof organizationId !== 'string') {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      const id = req.params['id'];
+      if (typeof id !== 'string' || id === '') {
+        res.status(400).json({ error: 'Invoice ID is required' });
+        return;
+      }
+
+      const { invoice, content } = await billingService.export837PClaim(id, organizationId);
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="claim-${invoice.invoiceNumber}.837p"`);
+      res.send(content);
+    } catch (error) {
+      handleBillingError(error, res, next);
+    }
+  });
+
+  /**
+   * GET /api/billing/invoices/:id/export/cms1500
+   * CMS-1500 claim form JSON. 422 if any line fails the EVV gate.
+   */
+  router.get('/invoices/:id/export/cms1500', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = req.user?.organizationId;
+      if (typeof organizationId !== 'string') {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      const id = req.params['id'];
+      if (typeof id !== 'string' || id === '') {
+        res.status(400).json({ error: 'Invoice ID is required' });
+        return;
+      }
+
+      res.json(await billingService.exportCMS1500Claim(id, organizationId));
+    } catch (error) {
+      handleBillingError(error, res, next);
+    }
+  });
+
+  /**
+   * GET /api/billing/claims/export/csv?payor=
+   * Claims queue CSV. Rows failing the EVV gate are excluded; the count is in X-EVV-Excluded-Count.
+   */
+  router.get('/claims/export/csv', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = req.user?.organizationId;
+      if (typeof organizationId !== 'string') {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const { csv, excludedCount } = await billingService.exportClaimsCSV(organizationId, {
+        payor: parsePayorFilter(req.query['payor']),
+      });
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="claims-queue-export.csv"');
+      res.setHeader('X-EVV-Excluded-Count', String(excludedCount));
+      res.send(csv);
+    } catch (error) {
+      handleBillingError(error, res, next);
     }
   });
 
