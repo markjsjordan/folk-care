@@ -16,7 +16,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.2",
+    "@anthropic-ai/sdk": "^0.131.0",
     "@folkcare/core": "^0.1.0",
     "zod": "^3.23.8"
   },

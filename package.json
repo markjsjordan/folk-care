@@ -115,8 +115,8 @@
     "jscpd": "^4.0.5",
     "openapi-to-postmanv2": "^5.5.0",
     "patch-package": "^8.0.1",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "sql-lint": "^1.0.2",
     "supabase": "^2.62.5",
     "supertest": "^7.1.4",
@@ -131,23 +131,23 @@
     "npm": ">=10.9.0"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.90.10",
-    "express-rate-limit": "^8.2.1",
+    "@tanstack/react-query": "^5.104.1",
+    "express-rate-limit": "^8.7.0",
     "js-yaml": "4.1.1",
     "rate-limit-redis": "^4.3.0",
-    "react-joyride": "^3.0.0-7",
-    "react-native-reanimated": "~4.2.0",
-    "react-native-worklets": "^0.7.1",
+    "react-joyride": "^3.2.0",
+    "react-native-reanimated": "~4.7.1",
+    "react-native-worklets": "^0.13.0",
     "redis": "^5.10.0",
-    "resend": "^6.5.2",
-    "swagger-jsdoc": "^6.2.8",
+    "resend": "^6.32.0",
+    "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1"
   },
   "optionalDependencies": {
-    "@esbuild/linux-x64": "0.27.1",
-    "@rollup/rollup-linux-x64-gnu": "4.53.3",
-    "@tailwindcss/oxide-linux-x64-gnu": "4.1.17",
-    "lightningcss-linux-x64-gnu": "1.30.2"
+    "@esbuild/linux-x64": "0.28.2",
+    "@rollup/rollup-linux-x64-gnu": "4.64.0",
+    "@tailwindcss/oxide-linux-x64-gnu": "4.3.3",
+    "lightningcss-linux-x64-gnu": "1.33.0"
   },
   "overrides": {
     "@types/express": "^5.0.5",

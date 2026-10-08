@@ -23,15 +23,15 @@
     "@folkcare/caregiver-staff": "^0.1.0",
     "@folkcare/core": "^0.1.0",
     "@folkcare/time-tracking-evv": "^0.1.0",
-    "pdfkit": "^0.17.2",
-    "pg": "^8.16.3",
+    "pdfkit": "^0.20.2",
+    "pg": "^8.23.1",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/pdfkit": "^0.17.3",
-    "@types/pg": "^8.15.6",
+    "@types/pg": "^8.23.1",
     "@typescript-eslint/eslint-plugin": "^8.46.4",
     "@typescript-eslint/parser": "^8.46.4",
     "@vitest/coverage-v8": "^4.0.8",
