@@ -85,7 +85,6 @@ export const CreateAuditPage: React.FC = () => {
     register,
     handleSubmit,
     formState: { errors },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } = useForm<AuditFormData>({
     resolver: zodResolver(auditSchema as any),
     defaultValues: {
@@ -189,7 +188,7 @@ export const CreateAuditPage: React.FC = () => {
             </div>
 
             {/*
-              TODO: No reusable user-picker component exists under @/core/components yet.
+              Pending: No reusable user-picker component exists under @/core/components yet.
               Using a plain text input for the lead auditor's user ID until one is built.
             */}
             <FormField label="Lead Auditor ID" error={errors.leadAuditorId?.message} required>

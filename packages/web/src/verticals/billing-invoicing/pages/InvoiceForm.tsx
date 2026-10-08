@@ -99,7 +99,7 @@ type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 /**
  * Parse a comma/newline separated string of billable item IDs into an array.
  *
- * TODO: No reusable billable-items picker component exists under
+ * Pending: No reusable billable-items picker component exists under
  * @/core/components yet. Using a plain textarea stopgap (comma or
  * newline separated IDs) until a real billable-items selector is built.
  */
@@ -129,7 +129,6 @@ export const InvoiceForm: React.FC = () => {
     handleSubmit,
     reset,
     formState: { errors },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema as any),
     defaultValues: {
@@ -287,7 +286,7 @@ export const InvoiceForm: React.FC = () => {
             </div>
 
             {/*
-              TODO: No reusable billable-items picker component exists under
+              Pending: No reusable billable-items picker component exists under
               @/core/components yet. Using a plain textarea stopgap (comma or
               newline separated IDs) until a real billable-items selector is
               built in a follow-up.
