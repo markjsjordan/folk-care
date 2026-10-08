@@ -5,7 +5,7 @@ import moment from 'moment';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, Plus, List, Layout, Home, Phone, Building2, ZoomIn, ZoomOut, Clock } from 'lucide-react';
+import { CalendarDays, Plus, List, Layout, Home, Phone, Building2, ZoomIn, ZoomOut, Clock, Zap } from 'lucide-react';
 import { useCalendarVisits, useVisitApi, useCaregiverAvailability } from '../hooks/useVisits';
 import { useAuth } from '@/core/hooks';
 import { EmptyState } from '@/core/components/feedback/EmptyState';
@@ -174,6 +174,19 @@ export const CalendarView: React.FC = () => {
   const [showLegend, setShowLegend] = useState(true);
   const [selectedBranches] = useState<string[]>([]);
   const [selectedCaregiverFilter, setSelectedCaregiverFilter] = useState<string | null>(null);
+  const [expandedCaregivers, setExpandedCaregivers] = useState<Set<string>>(new Set());
+
+  const toggleExpandedCaregiver = useCallback((caregiverId: string) => {
+    setExpandedCaregivers(prev => {
+      const next = new Set(prev);
+      if (next.has(caregiverId)) {
+        next.delete(caregiverId);
+      } else {
+        next.add(caregiverId);
+      }
+      return next;
+    });
+  }, []);
 
   // Week view UX controls
   const [densityMode, setDensityMode] = useState<DensityMode>(() => {
@@ -431,13 +444,9 @@ export const CalendarView: React.FC = () => {
     }
   }, [updateVisitSchedule]);
 
-  // Handle event selection - navigate to a deep-linked visit detail query param.
-  // No dedicated visit-detail route/modal exists yet (verified: no such route in
-  // App.tsx, no VisitDetail component under scheduling-visits/components). This
-  // is a pragmatic minimal implementation; a real detail view should be a
-  // follow-up.
+  // Handle event selection - navigate to dedicated visit detail page.
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    navigate(`/visits?id=${event.resource.id}`);
+    navigate(`/visits/${event.resource.id}`);
   }, [navigate]);
 
   // Handle slot selection (creating new visit).
@@ -670,6 +679,12 @@ export const CalendarView: React.FC = () => {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">Scheduling Calendar</h1>
+              {visits.length >= 500 && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                  <Zap className="h-3 w-3" />
+                  500+ Visits (Optimized)
+                </span>
+              )}
               {view === 'week' && (
                 <span className="text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
                   {weeklyVisitCount} {weeklyVisitCount === 1 ? 'visit' : 'visits'} this week
@@ -997,7 +1012,10 @@ export const CalendarView: React.FC = () => {
 
                     {caregiver.visits.length > 0 && (
                       <div className="space-y-1">
-                        {caregiver.visits.map(visit => (
+                        {(expandedCaregivers.has(caregiver.caregiver_id)
+                          ? caregiver.visits
+                          : caregiver.visits.slice(0, 4)
+                        ).map(visit => (
                           <div key={visit.id} className="text-xs bg-gray-50 rounded p-1.5">
                             <div className="font-medium text-gray-700">
                               {visit.scheduled_start_time} - {visit.scheduled_end_time}
@@ -1005,6 +1023,20 @@ export const CalendarView: React.FC = () => {
                             <div className="text-gray-500">{visit.client_name}</div>
                           </div>
                         ))}
+                        {caregiver.visits.length > 4 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpandedCaregiver(caregiver.caregiver_id);
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium pt-1 block"
+                          >
+                            {expandedCaregivers.has(caregiver.caregiver_id)
+                              ? 'Show less'
+                              : `+${caregiver.visits.length - 4} more visits`}
+                          </button>
+                        )}
                       </div>
                     )}
 

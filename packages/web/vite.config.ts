@@ -173,7 +173,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 500,
     commonjsOptions: {
       include: [/node_modules/],
       transformMixedEsModules: true,
@@ -189,8 +189,44 @@ export default defineConfig({
         /sentry_cpu_profiler.*\.node$/,
       ],
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (
+              id.includes('/react/') ||
+              id.includes('/react-dom/') ||
+              id.includes('/react-router/') ||
+              id.includes('/react-router-dom/') ||
+              id.includes('/react-is/')
+            ) {
+              return 'react-vendor';
+            }
+            if (
+              id.includes('/recharts/') ||
+              id.includes('/d3-') ||
+              id.includes('/victory-vendor/')
+            ) {
+              return 'charts-vendor';
+            }
+            if (id.includes('/lucide-react/')) {
+              return 'lucide-react';
+            }
+            if (id.includes('/date-fns/')) {
+              return 'date-fns';
+            }
+            if (id.includes('/moment/')) {
+              return 'moment-vendor';
+            }
+            if (id.includes('/react-big-calendar/')) {
+              return 'calendar-vendor';
+            }
+            if (id.includes('/@tanstack/')) {
+              return 'tanstack-vendor';
+            }
+            if (id.includes('/framer-motion/')) {
+              return 'framer-motion';
+            }
+          }
+          return undefined;
         },
       },
     },
