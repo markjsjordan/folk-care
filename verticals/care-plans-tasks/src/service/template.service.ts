@@ -22,7 +22,14 @@ import {
   Priority,
   GoalStatus,
 } from '../types/care-plan';
-import { CarePlanRepository } from '../repository/care-plan-repository';
+import { CarePlanRepository } from '../repository/care-plan-repository.js';
+import { TemplateFamilyRepository } from '../repository/template-family-repository.js';
+import {
+  TemplateFamily,
+  TemplateVersion,
+  CreateTemplateFamilyInput,
+  CreateTemplateVersionInput,
+} from '../types/care-plan-versioning.js';
 
 /**
  * Options for customizing a care plan created from a template
@@ -40,9 +47,21 @@ export interface CreateFromTemplateOptions {
 
 export class TemplateService {
   private repository: CarePlanRepository;
+  private templateFamilyRepository?: TemplateFamilyRepository;
 
-  constructor(repository: CarePlanRepository) {
+  constructor(
+    repository: CarePlanRepository,
+    templateFamilyRepository?: TemplateFamilyRepository
+  ) {
     this.repository = repository;
+    if (templateFamilyRepository) {
+      this.templateFamilyRepository = templateFamilyRepository;
+    } else if (repository && typeof (repository as any).getDatabase === 'function') {
+      const db = (repository as any).getDatabase();
+      if (db) {
+        this.templateFamilyRepository = new TemplateFamilyRepository(db);
+      }
+    }
   }
 
   /**
@@ -188,6 +207,72 @@ export class TemplateService {
     const timestamp = Date.now().toString(36).toUpperCase();
     const random = Math.random().toString(36).substring(2, 6).toUpperCase();
     return `${prefix}-${timestamp}-${random}`;
+  }
+
+  /**
+   * Look up template family by organization and code
+   */
+  async getTemplateFamilyByCode(
+    organizationId: UUID,
+    code: string
+  ): Promise<TemplateFamily | null> {
+    if (!this.templateFamilyRepository) return null;
+    return this.templateFamilyRepository.getTemplateFamilyByCode(organizationId, code);
+  }
+
+  /**
+   * Look up template family by ID
+   */
+  async getTemplateFamilyById(id: UUID): Promise<TemplateFamily | null> {
+    if (!this.templateFamilyRepository) return null;
+    return this.templateFamilyRepository.getTemplateFamilyById(id);
+  }
+
+  /**
+   * List template families for an organization
+   */
+  async listTemplateFamilies(
+    organizationId: UUID,
+    category?: string
+  ): Promise<TemplateFamily[]> {
+    if (!this.templateFamilyRepository) return [];
+    return this.templateFamilyRepository.listTemplateFamilies(organizationId, category);
+  }
+
+  /**
+   * Create a new template family
+   */
+  async createTemplateFamily(input: CreateTemplateFamilyInput): Promise<TemplateFamily> {
+    if (!this.templateFamilyRepository) {
+      throw new Error('Template family repository not configured');
+    }
+    return this.templateFamilyRepository.createTemplateFamily(input);
+  }
+
+  /**
+   * Create a new template version
+   */
+  async createTemplateVersion(input: CreateTemplateVersionInput): Promise<TemplateVersion> {
+    if (!this.templateFamilyRepository) {
+      throw new Error('Template family repository not configured');
+    }
+    return this.templateFamilyRepository.createTemplateVersion(input);
+  }
+
+  /**
+   * Get latest active or released template version for a family
+   */
+  async getLatestTemplateVersion(familyId: UUID): Promise<TemplateVersion | null> {
+    if (!this.templateFamilyRepository) return null;
+    return this.templateFamilyRepository.getLatestTemplateVersion(familyId);
+  }
+
+  /**
+   * Get all template versions for a family
+   */
+  async getTemplateVersions(familyId: UUID): Promise<TemplateVersion[]> {
+    if (!this.templateFamilyRepository) return [];
+    return this.templateFamilyRepository.getTemplateVersions(familyId);
   }
 }
 

@@ -23,6 +23,7 @@ export interface CarePlan extends Entity, SoftDeletable {
   // Plan identification
   planNumber: string; // Human-readable identifier
   name: string;
+  currentVersion?: number;
   
   // Associations
   clientId: UUID;
