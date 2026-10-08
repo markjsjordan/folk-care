@@ -1,3 +1,4 @@
+// Build revision: 2026-10-08-login-chunk-fix
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
