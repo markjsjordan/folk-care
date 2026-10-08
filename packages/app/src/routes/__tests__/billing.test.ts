@@ -15,27 +15,45 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Database } from '@folkcare/core';
 import type { Router } from 'express';
+import express from 'express';
+import request from 'supertest';
 
 // Type for Express Router stack layer (Express internals aren't fully typed)
 type RouterLayer = any;
+
+const OWN_ORG = '223e4567-e89b-12d3-a456-426614174000';
+const OTHER_ORG = '999e4567-e89b-12d3-a456-426614174999';
+
+const mocks = vi.hoisted(() => ({
+  findInvoiceById: vi.fn(),
+  updateInvoice: vi.fn(),
+  deleteInvoice: vi.fn(),
+  sendInvoice: vi.fn(),
+  voidInvoice: vi.fn(),
+  generateInvoicePDF: vi.fn(),
+}));
 
 // Mock billing-invoicing module
 vi.mock('@folkcare/billing-invoicing', () => ({
   BillingRepository: vi.fn().mockImplementation(function () {
     return {
       searchInvoices: vi.fn().mockResolvedValue([]),
-      findInvoiceById: vi.fn().mockResolvedValue(null),
+      findInvoiceById: mocks.findInvoiceById,
     };
   }),
   BillingService: vi.fn().mockImplementation(function () {
     return {
+      updateInvoice: mocks.updateInvoice,
+      deleteInvoice: mocks.deleteInvoice,
+      sendInvoice: mocks.sendInvoice,
+      voidInvoice: mocks.voidInvoice,
       getEVVGateService: vi.fn().mockReturnValue({
         validateVisitEVV: vi.fn().mockReturnValue({ isValid: true }),
       }),
     };
   }),
   InvoicePdfGeneratorService: vi.fn().mockImplementation(function () {
-    return {};
+    return { generateInvoicePDF: mocks.generateInvoicePDF };
   }),
   RevenueForecastingService: vi.fn().mockImplementation(function () {
     return {};
@@ -254,6 +272,64 @@ describe('Billing Routes', () => {
       // Summary endpoint returns counts by status
       const expectedCounts = ['total', 'draft', 'pending', 'sent', 'paid', 'overdue'];
       expect(expectedCounts.length).toBe(6);
+    });
+  });
+
+  describe('Cross-organization invoice access', () => {
+    const INVOICE_ID = 'inv-1';
+    const routes: Array<[string, 'get' | 'patch' | 'delete' | 'post', string]> = [
+      ['get invoice', 'get', `/invoices/${INVOICE_ID}`],
+      ['get payments', 'get', `/invoices/${INVOICE_ID}/payments`],
+      ['patch invoice', 'patch', `/invoices/${INVOICE_ID}`],
+      ['delete invoice', 'delete', `/invoices/${INVOICE_ID}`],
+      ['send invoice', 'post', `/invoices/${INVOICE_ID}/send`],
+      ['void invoice', 'post', `/invoices/${INVOICE_ID}/void`],
+      ['get pdf', 'get', `/invoices/${INVOICE_ID}/pdf`],
+    ];
+
+    const makeApp = (): express.Express => {
+      const app = express();
+      app.use(express.json());
+      app.use(router);
+      return app;
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mocks.updateInvoice.mockResolvedValue({ id: INVOICE_ID });
+      mocks.sendInvoice.mockResolvedValue({ id: INVOICE_ID });
+      mocks.voidInvoice.mockResolvedValue({ id: INVOICE_ID });
+      mocks.generateInvoicePDF.mockResolvedValue(Buffer.from('pdf'));
+    });
+
+    it.each(routes)('%s returns 404 for another organization\'s invoice', async (_name, method, path) => {
+      mocks.findInvoiceById.mockResolvedValue({ id: INVOICE_ID, organizationId: OTHER_ORG, payments: [] });
+
+      const res = await request(makeApp())[method](path);
+
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({ error: 'Invoice not found' });
+      expect(mocks.updateInvoice).not.toHaveBeenCalled();
+      expect(mocks.deleteInvoice).not.toHaveBeenCalled();
+      expect(mocks.sendInvoice).not.toHaveBeenCalled();
+      expect(mocks.voidInvoice).not.toHaveBeenCalled();
+      expect(mocks.generateInvoicePDF).not.toHaveBeenCalled();
+    });
+
+    it.each(routes)('%s returns 404 for a nonexistent invoice', async (_name, method, path) => {
+      mocks.findInvoiceById.mockResolvedValue(null);
+
+      const res = await request(makeApp())[method](path);
+
+      expect(res.status).toBe(404);
+    });
+
+    it.each(routes)('%s succeeds for own-organization invoice', async (_name, method, path) => {
+      mocks.findInvoiceById.mockResolvedValue({ id: INVOICE_ID, organizationId: OWN_ORG, payments: [] });
+
+      const res = await request(makeApp())[method](path);
+
+      expect(res.status).toBeLessThan(300);
     });
   });
 });

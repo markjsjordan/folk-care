@@ -15,6 +15,7 @@ import {
   InvoicePdfGeneratorService,
   EVVGateBlockedError,
   type PayorTypeFilter,
+  type Invoice,
 } from '@folkcare/billing-invoicing';
 import knex from 'knex';
 
@@ -43,6 +44,24 @@ export function createBillingRouter(db: Database): Router {
 
   // All billing routes require authentication
   router.use(authMiddleware.requireAuth);
+
+  /**
+   * Load an invoice only if it belongs to the caller's organization.
+   * Responds 401/404 itself and returns null; cross-org access is a 404 so existence is not leaked.
+   */
+  const loadOwnedInvoice = async (req: Request, res: Response, id: string): Promise<Invoice | null> => {
+    const organizationId = req.user?.organizationId;
+    if (typeof organizationId !== 'string') {
+      res.status(401).json({ error: 'Unauthorized' });
+      return null;
+    }
+    const invoice = await billingRepo.findInvoiceById(id);
+    if (invoice?.organizationId !== organizationId) {
+      res.status(404).json({ error: 'Invoice not found' });
+      return null;
+    }
+    return invoice;
+  };
 
   /**
    * GET /api/billing/invoices
@@ -158,12 +177,8 @@ export function createBillingRouter(db: Database): Router {
         return;
       }
 
-      const invoice = await billingRepo.findInvoiceById(id);
-      
+      const invoice = await loadOwnedInvoice(req, res, id);
       if (invoice === null) {
-        res.status(404).json({
-          error: 'Invoice not found'
-        });
         return;
       }
 
@@ -186,12 +201,8 @@ export function createBillingRouter(db: Database): Router {
         return;
       }
 
-      const invoice = await billingRepo.findInvoiceById(id);
-      
+      const invoice = await loadOwnedInvoice(req, res, id);
       if (invoice === null) {
-        res.status(404).json({
-          error: 'Invoice not found'
-        });
         return;
       }
 
@@ -288,6 +299,10 @@ export function createBillingRouter(db: Database): Router {
         return;
       }
 
+      if ((await loadOwnedInvoice(req, res, id)) === null) {
+        return;
+      }
+
       const result = await billingService.updateInvoice(id, req.body, req.user!.userId);
       res.json(result);
     } catch (error) {
@@ -305,6 +320,10 @@ export function createBillingRouter(db: Database): Router {
 
       if (typeof id !== 'string' || id.length === 0) {
         res.status(400).json({ error: 'Invoice ID is required' });
+        return;
+      }
+
+      if ((await loadOwnedInvoice(req, res, id)) === null) {
         return;
       }
 
@@ -328,6 +347,10 @@ export function createBillingRouter(db: Database): Router {
         return;
       }
 
+      if ((await loadOwnedInvoice(req, res, id)) === null) {
+        return;
+      }
+
       const result = await billingService.sendInvoice(id, req.user!.userId);
       res.json(result);
     } catch (error) {
@@ -345,6 +368,10 @@ export function createBillingRouter(db: Database): Router {
 
       if (typeof id !== 'string' || id.length === 0) {
         res.status(400).json({ error: 'Invoice ID is required' });
+        return;
+      }
+
+      if ((await loadOwnedInvoice(req, res, id)) === null) {
         return;
       }
 
@@ -368,10 +395,8 @@ export function createBillingRouter(db: Database): Router {
         return;
       }
 
-      const invoice = await billingRepo.findInvoiceById(id);
-
+      const invoice = await loadOwnedInvoice(req, res, id);
       if (invoice === null) {
-        res.status(404).json({ error: 'Invoice not found' });
         return;
       }
 
