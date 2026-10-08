@@ -2,6 +2,7 @@ export type InvoiceStatus =
   | 'DRAFT' 
   | 'PENDING_REVIEW' 
   | 'APPROVED' 
+  | 'READY_TO_SUBMIT' 
   | 'SENT' 
   | 'SUBMITTED' 
   | 'PARTIALLY_PAID' 
@@ -177,3 +178,120 @@ export interface BillingSummary {
     overdue: number;
   };
 }
+
+export type ClaimStatus = 
+  | 'EVV_INCOMPLETE' 
+  | 'VERIFIED_READY' 
+  | 'BILLED' 
+  | 'PAID' 
+  | 'REJECTED';
+
+export type PayorTypeFilter = 
+  | 'ALL' 
+  | 'MEDICAID_MCO' 
+  | 'MEDICARE' 
+  | 'PRIVATE_PAY' 
+  | 'VA';
+
+export interface EVVValidationSummary {
+  isValid: boolean;
+  complianceStatus: 'VERIFIED_READY' | 'EVV_INCOMPLETE';
+  sixElementsComplete: boolean;
+  geofenceVerified: boolean;
+  missingElements: string[];
+  errors: string[];
+  warnings: string[];
+  details: {
+    serviceTypePresent: boolean;
+    clientPresent: boolean;
+    caregiverPresent: boolean;
+    serviceDatePresent: boolean;
+    serviceLocationPresent: boolean;
+    serviceTimePresent: boolean;
+    clockInGeofencePassed: boolean;
+    clockOutGeofencePassed: boolean;
+    hasApprovedManualOverride: boolean;
+  };
+}
+
+export interface ClaimsQueueItem {
+  id: string;
+  claimNumber: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  clientId: string;
+  clientName: string;
+  clientMedicaidId?: string;
+  caregiverId: string;
+  caregiverName: string;
+  serviceDate: string;
+  serviceCode: string;
+  serviceDescription: string;
+  units: number;
+  unitType: UnitType;
+  unitRate: number;
+  totalAmount: number;
+  payorType: PayerType;
+  payorName: string;
+  status: ClaimStatus; // EVV_INCOMPLETE | VERIFIED_READY | BILLED | PAID | REJECTED
+  evvValidation: EVVValidationSummary;
+  rejectionReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BillingDashboardSummary {
+  totalUnbilledAmount: number;
+  totalUnbilledCount: number;
+  pendingEVVCount: number;
+  pendingEVVAmount: number;
+  claimsReadyCount: number;
+  claimsReadyAmount: number;
+  totalBilledMtdAmount: number;
+  totalBilledMtdCount: number;
+}
+
+export interface BatchGenerationResult {
+  generatedInvoices: Invoice[];
+  verifiedVisitsCount: number;
+  blockedVisitsCount: number;
+  blockedVisits: {
+    visitId: string;
+    clientName: string;
+    reasons: string[];
+    missingElements: string[];
+  }[];
+}
+
+export interface CMS1500ClaimForm {
+  claimNumber: string;
+  box1_payerType: string;
+  box2_patientName: string;
+  box3_patientBirthDate?: string;
+  box4_insuredName?: string;
+  box5_patientAddress?: string;
+  box10_conditionRelatedToEmployment?: boolean;
+  box11_insuredPolicyGroup?: string;
+  box12_patientSignatureOnFile: boolean;
+  box13_insuredSignatureOnFile: boolean;
+  box17_referringProvider?: string;
+  box21_diagnosisCodes: string[];
+  box24_serviceLines: {
+    dateOfServiceFrom: string;
+    dateOfServiceTo: string;
+    placeOfService: string;
+    procedureCode: string;
+    modifiers: string[];
+    diagnosisPointer: string;
+    charges: number;
+    daysOrUnits: number;
+    renderingProviderNpi?: string;
+    evvVerified: boolean;
+  }[];
+  box25_federalTaxId?: string;
+  box28_totalCharge: number;
+  box31_physicianSignature: string;
+  box32_serviceFacilityLocation: string;
+  box33_billingProviderInfo: string;
+}
+

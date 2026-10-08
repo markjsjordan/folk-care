@@ -577,6 +577,19 @@ export class BillingRepository {
     );
   }
 
+  async linkBillableItemsToInvoice(
+    billableItemIds: UUID[],
+    invoiceId: UUID,
+    invoiceDate: Date,
+    client?: PoolClient
+  ): Promise<void> {
+    const db = client || this.pool;
+    await db.query(
+      `UPDATE billable_items SET invoice_id = $2, invoice_date = $3 WHERE id = ANY($1)`,
+      [billableItemIds, invoiceId, invoiceDate]
+    );
+  }
+
   /**
    * INVOICE OPERATIONS
    */
