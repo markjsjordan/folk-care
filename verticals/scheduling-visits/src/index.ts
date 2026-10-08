@@ -15,6 +15,12 @@
 
 // Types
 export * from './types/schedule';
+export * from './types/visit-pattern.js';
+
+// Recurring Visit Pattern Engine & Repository
+export { VisitPatternRepository } from './repository/visit-pattern-repository.js';
+export { RecurringVisitPatternEngine } from './service/pattern-generator-service.js';
+export type { GenerateVisitsOptions } from './service/pattern-generator-service.js';
 
 // Service
 export { ScheduleService } from './service/schedule-service.js';
@@ -191,3 +197,18 @@ export type {
   UndoStack,
 } from './service/schedule-undo-redo-service.js';
 export { createUndoRedoRoutes } from './api/undo-redo-routes.js';
+
+// Supervisory Visit Cadence Engine (State Regulations: FL AHCA 60-day, TX HHSC 60-day)
+export {
+  SupervisoryCadenceService,
+  calculateSupervisoryCadence,
+  isSkilledCare,
+  STATE_CADENCE_CONFIGS,
+} from './service/supervisory-cadence-service.js';
+export type {
+  AcuityLevel,
+  SupervisionStatus,
+  StateCadenceConfig,
+  SupervisoryCadenceInput,
+  SupervisoryCadenceResult,
+} from './service/supervisory-cadence-service.js';

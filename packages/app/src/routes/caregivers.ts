@@ -159,6 +159,18 @@ export function createCaregiverRouter(db: Database): Router {
   });
 
   /**
+   * GET /api/caregivers/availability
+   * Normalization redirect to canonical /api/visits/caregivers/availability
+   */
+  router.get('/availability', (req: Request, res: Response) => {
+    const queryEntries = Object.entries(req.query).filter(([, v]) => typeof v === 'string') as [string, string][];
+    const queryString = new URLSearchParams(queryEntries).toString();
+    const querySuffix = queryString !== '' ? '?' + queryString : '';
+    const targetUrl = `/api/visits/caregivers/availability${querySuffix}`;
+    res.redirect(307, targetUrl);
+  });
+
+  /**
    * GET /api/caregivers/:id
    * Get caregiver by ID
    */

@@ -16,6 +16,10 @@ import {
   parseCsv,
   Database,
   UserContext,
+  DuplicateMatch,
+  ImportPreviewRow,
+  ImportPreviewResult,
+  CommitImportResult,
 } from '@folkcare/core';
 import {
   Caregiver,
@@ -90,8 +94,10 @@ export interface CaregiverImportRow {
 export class CaregiverImportService implements ImportService<CaregiverImportRow, Caregiver> {
   private repository: CaregiverRepository;
   private validator: CaregiverValidator;
+  private database: Database;
 
   constructor(database: Database) {
+    this.database = database;
     this.repository = new CaregiverRepository(database);
     this.validator = new CaregiverValidator();
   }
@@ -838,4 +844,292 @@ export class CaregiverImportService implements ImportService<CaregiverImportRow,
     const validUnits = ['HOURLY', 'VISIT', 'DAILY', 'SALARY'];
     return validUnits.includes(unit.toUpperCase());
   }
+
+  /**
+   * Phase 1: Validate file records, detect duplicates, and generate preview
+   */
+  async validateAndPreview(
+    records: CaregiverImportRow[],
+    options: ImportOptions,
+    detectedHeaders?: string[],
+    mappings?: Record<string, string>
+  ): Promise<ImportPreviewResult<CaregiverImportRow>> {
+    const rows: ImportPreviewRow<CaregiverImportRow>[] = [];
+    let validCount = 0;
+    let errorCount = 0;
+    let warningCount = 0;
+    let duplicateCount = 0;
+
+    const duplicateMap = await this.findDuplicates(records, options.organizationId);
+
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i]!;
+      const rowNumber = i + 2;
+
+      const validationErrors = await this.validateRecord(record, rowNumber);
+
+      try {
+        const caregiverInput = this.mapRowToInput(record, options.organizationId);
+        const schemaValidation = this.validator.validateCreate(caregiverInput);
+        if (!schemaValidation.success && schemaValidation.errors) {
+          for (const err of schemaValidation.errors) {
+            const fieldPath = err.field;
+            if (!validationErrors.some((e) => e.field === fieldPath)) {
+              validationErrors.push({
+                row: rowNumber,
+                field: fieldPath,
+                message: err.message,
+                severity: 'ERROR',
+              });
+            }
+          }
+        }
+      } catch (err) {
+        validationErrors.push({
+          row: rowNumber,
+          message: `Mapping error: ${err instanceof Error ? err.message : String(err)}`,
+          severity: 'ERROR',
+        });
+      }
+
+      const hasFatalErrors = validationErrors.some((e) => e.severity === 'ERROR');
+      const duplicate = duplicateMap.get(i);
+
+      let status: 'VALID' | 'WARNING' | 'ERROR' | 'DUPLICATE';
+      if (hasFatalErrors) {
+        status = 'ERROR';
+        errorCount++;
+      } else if (duplicate) {
+        status = 'DUPLICATE';
+        duplicateCount++;
+      } else if (validationErrors.some((e) => e.severity === 'WARNING')) {
+        status = 'WARNING';
+        warningCount++;
+        validCount++;
+      } else {
+        status = 'VALID';
+        validCount++;
+      }
+
+      rows.push({
+        rowNumber,
+        data: record,
+        status,
+        errors: validationErrors,
+        duplicate,
+        isDuplicate: Boolean(duplicate),
+      });
+    }
+
+    return {
+      phase: 'preview',
+      totalRows: records.length,
+      validCount,
+      errorCount,
+      warningCount,
+      duplicateCount,
+      headers: detectedHeaders ?? Object.keys(records[0] ?? {}),
+      mappings: mappings ?? {},
+      rows,
+      canCommit: validCount > 0 || (duplicateCount > 0 && Boolean(options.updateExisting)),
+    };
+  }
+
+  /**
+   * Find duplicates against existing database records
+   */
+  private async findDuplicates(
+    records: CaregiverImportRow[],
+    organizationId: string
+  ): Promise<Map<number, DuplicateMatch>> {
+    const duplicateMap = new Map<number, DuplicateMatch>();
+    if (records.length === 0) return duplicateMap;
+
+    const employeeNumbers = records
+      .map((r) => r.employee_number?.trim())
+      .filter((en): en is string => Boolean(en));
+
+    const emails = records
+      .map((r) => r.email?.trim().toLowerCase())
+      .filter((e): e is string => Boolean(e));
+
+    const queryParts: string[] = ['organization_id = $1', 'deleted_at IS NULL'];
+    const params: unknown[] = [organizationId];
+
+    if (employeeNumbers.length > 0 || emails.length > 0) {
+      const orClauses: string[] = [];
+      if (employeeNumbers.length > 0) {
+        params.push(employeeNumbers);
+        orClauses.push(`employee_number = ANY($${params.length})`);
+      }
+      if (emails.length > 0) {
+        params.push(emails);
+        orClauses.push(`LOWER(email) = ANY($${params.length})`);
+      }
+      queryParts.push(`(${orClauses.join(' OR ')})`);
+
+      try {
+        const query = `
+          SELECT id, employee_number, first_name, last_name, date_of_birth, email, ssn
+          FROM caregivers
+          WHERE ${queryParts.join(' AND ')}
+        `;
+        const result = await this.database.query(query, params);
+        const existingCaregivers = result.rows as unknown as Array<{
+          id: string;
+          employee_number?: string;
+          first_name: string;
+          last_name: string;
+          date_of_birth: Date | string;
+          email?: string;
+          ssn?: string;
+        }>;
+
+        for (let i = 0; i < records.length; i++) {
+          const r = records[i]!;
+          if (r.employee_number?.trim()) {
+            const match = existingCaregivers.find(
+              (c) => c.employee_number?.toLowerCase() === r.employee_number?.trim().toLowerCase()
+            );
+            if (match) {
+              duplicateMap.set(i, {
+                row: i + 2,
+                naturalKey: r.employee_number,
+                existingId: match.id,
+                existingLabel: `${match.first_name} ${match.last_name}`,
+                matchReason: `Employee number #${r.employee_number} already exists in organization`,
+                action: 'SKIP',
+              });
+              continue;
+            }
+          }
+
+          if (r.email?.trim()) {
+            const match = existingCaregivers.find(
+              (c) => c.email && c.email.toLowerCase() === r.email?.trim().toLowerCase()
+            );
+            if (match) {
+              duplicateMap.set(i, {
+                row: i + 2,
+                naturalKey: r.email,
+                existingId: match.id,
+                existingLabel: `${match.first_name} ${match.last_name}`,
+                matchReason: `Email ${r.email} already exists in organization`,
+                action: 'SKIP',
+              });
+              continue;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Caregiver duplicate check query warning:', err);
+      }
+    }
+
+    return duplicateMap;
+  }
+
+  /**
+   * Phase 2: Confirm & commit records into database inside a single transaction
+   */
+  async commitTransaction(
+    records: CaregiverImportRow[],
+    options: ImportOptions,
+    externalTxDb?: Database
+  ): Promise<CommitImportResult> {
+    const doCommit = async (txDb: Database): Promise<CommitImportResult> => {
+      const txRepo = new CaregiverRepository(txDb);
+      const errors: ImportError[] = [];
+      const importedIds: string[] = [];
+      let imported = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      const context: UserContext = {
+        userId: options.userId,
+        organizationId: options.organizationId,
+        permissions: ['caregivers:create', 'caregivers:update'],
+        roles: ['ADMIN'],
+        branchIds: [],
+      };
+
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i]!;
+        const rowNumber = i + 2;
+
+        const validationErrors = await this.validateRecord(record, rowNumber);
+        if (validationErrors.some((e) => e.severity === 'ERROR')) {
+          errors.push(...validationErrors);
+          skipped++;
+          continue;
+        }
+
+        try {
+          const caregiverInput = this.mapRowToInput(record, options.organizationId);
+
+          let existingCaregiver: Caregiver | null = null;
+          if (record.employee_number) {
+            existingCaregiver = await txRepo.findByEmployeeNumber(
+              record.employee_number,
+              options.organizationId
+            );
+          }
+
+          if (existingCaregiver && !options.updateExisting) {
+            skipped++;
+            errors.push({
+              row: rowNumber,
+              message: `Caregiver #${record.employee_number || existingCaregiver.id} already exists - skipped`,
+              severity: 'WARNING',
+            });
+          } else if (existingCaregiver && options.updateExisting) {
+            const updateInput = this.mapRowToUpdateInput(record);
+            await txRepo.update(existingCaregiver.id, updateInput, context);
+            importedIds.push(existingCaregiver.id);
+            updated++;
+          } else {
+            const created = await txRepo.create(caregiverInput, context);
+            importedIds.push(created.id);
+            imported++;
+          }
+        } catch (err) {
+          errors.push({
+            row: rowNumber,
+            message: `Commit error: ${err instanceof Error ? err.message : String(err)}`,
+            severity: 'ERROR',
+          });
+          throw err;
+        }
+      }
+
+      return {
+        success: true,
+        phase: 'committed',
+        imported,
+        updated,
+        skipped,
+        total: records.length,
+        errors,
+        importedIds,
+      };
+    };
+
+    if (externalTxDb) {
+      return await doCommit(externalTxDb);
+    }
+
+    return await this.database.transaction(async (client) => {
+      const txDb = {
+        query: (text: string, params?: unknown[]) => client.query(text, params),
+        getClient: async () => client,
+        transaction: async <T>(cb: (c: typeof client) => Promise<T>) => cb(client),
+        getPool: () => ({}) as never,
+        close: async () => {},
+        healthCheck: async () => true,
+      } as unknown as Database;
+
+      return await doCommit(txDb);
+    });
+  }
 }
+

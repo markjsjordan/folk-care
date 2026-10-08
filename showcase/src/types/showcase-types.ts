@@ -266,3 +266,91 @@ export interface ShiftSearchFilters {
   query?: string;
   status?: string[];
 }
+
+export type VisitType =
+  | 'REGULAR'
+  | 'INITIAL'
+  | 'DISCHARGE'
+  | 'RESPITE'
+  | 'EMERGENCY'
+  | 'MAKEUP'
+  | 'SUPERVISION'
+  | 'ASSESSMENT';
+
+export type VisitStatus =
+  | 'SCHEDULED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'UNASSIGNED';
+
+export interface VisitTask {
+  id: string;
+  title: string;
+  category?: string;
+  completed: boolean;
+  required?: boolean;
+  completedAt?: string;
+  notes?: string;
+}
+
+export interface VisitEVV {
+  verified: boolean;
+  verificationMethod: 'GPS' | 'TELEPHONY' | 'MANUAL';
+  geofenceStatus: 'VERIFIED' | 'OUT_OF_BOUNDS' | 'PENDING' | 'MANUAL_OVERRIDE';
+  distanceMeters?: number;
+  clockInTime?: string;
+  clockOutTime?: string;
+  gpsCoordinates?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+  };
+}
+
+export interface Visit {
+  id: string;
+  organizationId: string;
+  branchId: string;
+  visitNumber: string;
+  clientId: string;
+  clientName: string;
+  clientPhone?: string;
+  clientEmail?: string;
+  caregiverId?: string;
+  caregiverName?: string;
+  caregiverPhone?: string;
+  caregiverRole?: string;
+  visitType: VisitType;
+  status: VisitStatus;
+  scheduledDate: string;
+  scheduledStartTime: string;
+  scheduledEndTime: string;
+  scheduledDuration: number;
+  actualStartTime?: string;
+  actualEndTime?: string;
+  actualDuration?: number;
+  address: Address & { accessInstructions?: string; latitude?: number; longitude?: number };
+  services: string[];
+  tasks?: VisitTask[];
+  evv?: VisitEVV;
+  notes?: string;
+  assignmentMethod?: 'MANUAL' | 'AUTO_MATCH' | 'PREFERRED' | 'SELF_ASSIGN';
+  emergencyContact?: EmergencyContact;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VisitSearchFilters {
+  query?: string;
+  status?: VisitStatus[];
+  visitType?: VisitType[];
+  clientId?: string;
+  caregiverId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export type CreateVisitInput = Omit<Visit, 'id' | 'createdAt' | 'updatedAt'>;
+export type UpdateVisitInput = Partial<CreateVisitInput>;
+

@@ -210,6 +210,27 @@ export function createAIRoutes(_db: Database): Router {
   });
 
   /**
+   * POST /ai/autofill-suggestions
+   * Generate note autofill suggestions based on context and past notes
+   */
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  router.post('/ai/autofill-suggestions', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const suggestions = await aiService.generateAutofillSuggestions(req.body);
+      res.json({
+        success: true,
+        data: suggestions,
+      });
+    } catch (error) {
+      console.error('Error generating autofill suggestions:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate autofill suggestions',
+      });
+    }
+  });
+
+  /**
    * GET /ai/cache-stats
    * Get summarization cache statistics
    */

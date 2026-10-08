@@ -9,7 +9,12 @@ export { VisitList, CalendarView } from './pages';
 export { VisitCard } from './components';
 
 // Hooks
-export { useVisits, useMyVisits, useVisitApi, useCalendarVisits, useCaregiverAvailability } from './hooks/useVisits';
+export { useVisits, useVisit, useMyVisits, useVisitApi, useCalendarVisits, useCaregiverAvailability } from './hooks/useVisits';
+
+
+// Configuration
+export { VISIT_TYPES, getVisitTypeConfig } from './config/visitTypeConfig';
+export type { VisitTypeConfig } from './config/visitTypeConfig';
 
 // Types
 export type {
@@ -19,3 +24,4 @@ export type {
   VisitType,
   VisitAddress,
 } from './types';
+
