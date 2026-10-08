@@ -20,7 +20,12 @@
         "src/**/*.js",
         "src/**/*.jsx",
         "package.json",
-        "tsconfig.json"
+        "tsconfig.json",
+        "vite.config.ts",
+        "vite.config.js",
+        "*.config.ts",
+        "*.config.js",
+        "*.config.mjs"
       ]
     },
     "dev": {

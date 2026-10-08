@@ -249,12 +249,12 @@ jobs:
       - name: Build for Preview
         env:
           NODE_ENV: production
-        run: npx turbo run build
+        run: npm run build
 
       - name: Deploy to Vercel Preview
         id: deploy
         run: |
-          DEPLOYMENT_URL=$(vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --env DATABASE_URL="${{ secrets.PREVIEW_DATABASE_URL }}" --env ENVIRONMENT="preview")
+          DEPLOYMENT_URL=$(vercel deploy --force --token=${{ secrets.VERCEL_TOKEN }} --env DATABASE_URL="${{ secrets.PREVIEW_DATABASE_URL }}" --env ENVIRONMENT="preview")
           echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
           echo "✅ Preview deployment complete: $DEPLOYMENT_URL"
         env:
@@ -381,12 +381,12 @@ jobs:
       - name: Build for Production
         env:
           NODE_ENV: production
-        run: npx turbo run build
+        run: npm run build
 
       - name: Deploy to Vercel Production
         id: deploy
         run: |
-          DEPLOYMENT_URL=$(vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} \
+          DEPLOYMENT_URL=$(vercel deploy --prod --force --token=${{ secrets.VERCEL_TOKEN }} \
             --env DATABASE_URL="${{ secrets.DATABASE_URL }}" \
             --env STRIPE_SECRET_KEY="${{ secrets.STRIPE_SECRET_KEY }}" \
             --env STRIPE_WEBHOOK_SECRET="${{ secrets.STRIPE_WEBHOOK_SECRET }}" \
