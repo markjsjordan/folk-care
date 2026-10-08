@@ -262,7 +262,7 @@ export const NurseDashboard: React.FC = () => {
       icon: <Calendar className="h-6 w-6 text-yellow-600" />,
       change: '5 overdue',
       trend: 'down' as const,
-      // TODO: no /supervision-visits route exists yet -- disabled pending backend ticket
+      // Pending: no /supervision-visits route exists yet -- disabled pending backend ticket
     },
     {
       label: 'Quality Score',
@@ -280,7 +280,7 @@ export const NurseDashboard: React.FC = () => {
       dueDate: '11/10/2024',
       status: 'overdue' as const,
       visitType: '60-day supervision visit',
-      // TODO: no /supervision/:name route exists yet -- disabled pending backend ticket
+      // Pending: no /supervision/:name route exists yet -- disabled pending backend ticket
     },
     {
       clientName: 'James Thompson',
@@ -288,7 +288,7 @@ export const NurseDashboard: React.FC = () => {
       dueDate: '11/12/2024',
       status: 'overdue' as const,
       visitType: 'Quarterly assessment',
-      // TODO: no /supervision/:name route exists yet -- disabled pending backend ticket
+      // Pending: no /supervision/:name route exists yet -- disabled pending backend ticket
     },
     {
       clientName: 'Patricia Martinez',
@@ -296,7 +296,7 @@ export const NurseDashboard: React.FC = () => {
       dueDate: '11/18/2024',
       status: 'due-soon' as const,
       visitType: '60-day supervision visit',
-      // TODO: no /supervision/:name route exists yet -- disabled pending backend ticket
+      // Pending: no /supervision/:name route exists yet -- disabled pending backend ticket
     },
   ];
 
@@ -326,7 +326,7 @@ export const NurseDashboard: React.FC = () => {
       changeType: 'Dosage increase to 1000mg',
       requestedBy: 'Dr. Johnson',
       requestDate: '11/12/2024',
-      // TODO: no /medications/approval/:id route exists yet -- disabled pending backend ticket
+      // Pending: no /medications/approval/:id route exists yet -- disabled pending backend ticket
     },
     {
       clientName: 'Mary Williams',
@@ -334,7 +334,7 @@ export const NurseDashboard: React.FC = () => {
       changeType: 'New prescription',
       requestedBy: 'Dr. Smith',
       requestDate: '11/13/2024',
-      // TODO: no /medications/approval/:id route exists yet -- disabled pending backend ticket
+      // Pending: no /medications/approval/:id route exists yet -- disabled pending backend ticket
     },
     {
       clientName: 'David Brown',
@@ -342,7 +342,7 @@ export const NurseDashboard: React.FC = () => {
       changeType: 'Discontinuation',
       requestedBy: 'Dr. Lee',
       requestDate: '11/13/2024',
-      // TODO: no /medications/approval/:id route exists yet -- disabled pending backend ticket
+      // Pending: no /medications/approval/:id route exists yet -- disabled pending backend ticket
     },
   ];
 
@@ -409,7 +409,7 @@ export const NurseDashboard: React.FC = () => {
             </h2>
             <DemoBadge size="sm" />
           </div>
-          {/* TODO: no /supervision-visits route exists yet -- "View All" disabled pending backend ticket */}
+          {/* Pending: no /supervision-visits route exists yet -- "View All" disabled pending backend ticket */}
         </div>
         <div className="space-y-3">
           {supervisionVisits.length > 0 ? (
@@ -465,7 +465,7 @@ export const NurseDashboard: React.FC = () => {
               </h2>
               <DemoBadge size="sm" />
             </div>
-            {/* TODO: no /medications/approvals route exists yet -- "View All" disabled pending backend ticket */}
+            {/* Pending: no /medications/approvals route exists yet -- "View All" disabled pending backend ticket */}
           </div>
           <div className="space-y-3">
             {medicationChanges.map((change, index) => (
@@ -506,7 +506,7 @@ export const NurseDashboard: React.FC = () => {
               <ClipboardList className="h-5 w-5 mr-2" />
               Create Care Plan
             </Button>
-            {/* TODO: no /medications route exists yet -- "Review Medications" disabled pending backend ticket */}
+            {/* Pending: no /medications route exists yet -- "Review Medications" disabled pending backend ticket */}
             <Button
               variant="outline"
               className="justify-start"

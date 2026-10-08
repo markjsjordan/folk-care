@@ -1,0 +1,3 @@
+# False positive: dummy JWT ("...test.signature") used as a fixture in a Playwright
+# test template. Not a credential. Fingerprint format: commit:file:rule:line
+390544556194fd2b9e166288683587bd6030fdd4:tests/templates/FC-SCHED-001-TA-AUTOMATION-TEMPLATES.ts:generic-api-key:466

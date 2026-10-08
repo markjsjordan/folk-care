@@ -3,7 +3,35 @@ import express from 'express';
 import request from 'supertest';
 import adminRoutes from '../admin';
 import { initCacheService, getCacheService } from '@folkcare/core/service/cache.service';
-import { authContextMiddleware } from '../../middleware/auth-context';
+
+// Authenticate via the real middleware's contract: requireAuth sets req.user
+// (from a verified JWT in production). The retired header-based auth mock is gone.
+vi.mock('@folkcare/core', async () => {
+  const actual = await vi.importActual<typeof import('@folkcare/core')>('@folkcare/core');
+  return {
+    ...actual,
+    getDatabase: vi.fn().mockReturnValue({}),
+    AuthMiddleware: vi.fn().mockImplementation(function () {
+      return {
+        requireAuth: async (
+          req: { user?: unknown },
+          _res: unknown,
+          next: () => void
+        ): Promise<void> => {
+          req.user = {
+            userId: 'user-1',
+            email: 'admin@example.com',
+            organizationId: 'org-1',
+            branchIds: [],
+            roles: ['ADMIN'],
+            permissions: ['*'],
+          };
+          next();
+        },
+      };
+    }),
+  };
+});
 
 describe('Admin Routes', () => {
   let app: express.Express;
@@ -11,10 +39,7 @@ describe('Admin Routes', () => {
   beforeEach(async () => {
     app = express();
     app.use(express.json());
-    
-    // Add auth context middleware to populate req.userContext from headers
-    app.use(authContextMiddleware);
-    
+
     app.use('/admin', adminRoutes);
     
     // Initialize cache service

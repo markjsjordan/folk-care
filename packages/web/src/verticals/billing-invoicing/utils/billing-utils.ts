@@ -7,11 +7,24 @@ export const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
+export const formatDate = (date: Date | string): string => {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return String(date);
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+
 export const getInvoiceStatusColor = (status: InvoiceStatus): string => {
   const colors: Record<InvoiceStatus, string> = {
     DRAFT: 'bg-gray-100 text-gray-800',
     PENDING_REVIEW: 'bg-yellow-100 text-yellow-800',
     APPROVED: 'bg-blue-100 text-blue-800',
+    READY_TO_SUBMIT: 'bg-teal-100 text-teal-800',
     SENT: 'bg-blue-100 text-blue-800',
     SUBMITTED: 'bg-indigo-100 text-indigo-800',
     PARTIALLY_PAID: 'bg-orange-100 text-orange-800',
