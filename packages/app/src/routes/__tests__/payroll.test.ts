@@ -7,9 +7,36 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import express, { Express } from 'express';
 import request from 'supertest';
-import { Database } from '@folkcare/core';
+import { AuthMiddleware, Database } from '@folkcare/core';
 import { createPayrollRouter } from '../payroll';
-import { authContextMiddleware } from '../../middleware/auth-context';
+
+// Authenticate via the real middleware's contract: requireAuth sets req.user
+// (from a verified JWT in production). The retired header-based auth mock is gone.
+vi.mock('@folkcare/core', async () => {
+  const actual = await vi.importActual<typeof import('@folkcare/core')>('@folkcare/core');
+  return {
+    ...actual,
+    AuthMiddleware: vi.fn().mockImplementation(function () {
+      return {
+        requireAuth: async (
+          req: { user?: unknown },
+          _res: unknown,
+          next: () => void
+        ): Promise<void> => {
+          req.user = {
+            userId: 'user-1',
+            email: 'admin@example.com',
+            organizationId: 'org-1',
+            branchIds: [],
+            roles: ['ADMIN'],
+            permissions: ['*'],
+          };
+          next();
+        },
+      };
+    }),
+  };
+});
 
 // Mock the payroll-processing module
 const mockPayrollService = {
@@ -60,12 +87,25 @@ describe('Payroll Routes', () => {
   let app: Express;
   let mockDb: Database;
 
+
+  /** App whose auth middleware rejects the request, as requireAuth does without a valid JWT. */
+  const createUnauthenticatedApp = (): Express => {
+    vi.mocked(AuthMiddleware).mockImplementationOnce(function () {
+      return {
+        requireAuth: async (_req: unknown, res: express.Response): Promise<void> => {
+          res.status(401).json({ error: 'Unauthorized' });
+        },
+      };
+    } as never);
+    const unauthApp = express();
+    unauthApp.use(express.json());
+    unauthApp.use('/api', createPayrollRouter(mockDb));
+    return unauthApp;
+  };
+
   beforeEach(() => {
     app = express();
     app.use(express.json());
-    
-    // Add auth context middleware to populate req.userContext from headers
-    app.use(authContextMiddleware);
 
     // Mock database with getPool method
     mockDb = {
@@ -114,7 +154,7 @@ describe('Payroll Routes', () => {
     });
 
     it('should require user authentication', async () => {
-      const response = await request(app)
+      const response = await request(createUnauthenticatedApp())
         .post('/api/payroll/periods')
         .send({
           organizationId: 'org-1',
@@ -146,7 +186,7 @@ describe('Payroll Routes', () => {
     });
 
     it('should require authentication', async () => {
-      const response = await request(app).post('/api/payroll/periods/period-1/open');
+      const response = await request(createUnauthenticatedApp()).post('/api/payroll/periods/period-1/open');
 
       expect(response.status).toBe(401);
     });

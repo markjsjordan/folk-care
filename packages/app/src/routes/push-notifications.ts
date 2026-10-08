@@ -23,7 +23,7 @@ function getAuthMiddleware(): AuthMiddleware {
 
 // Apply authentication to all push notification routes
 router.use((req: Request, res: Response, next: NextFunction) => {
-  void getAuthMiddleware().requireAuth(req, res, next);
+  getAuthMiddleware().requireAuth(req, res, next).catch(next);
 });
 
 // Validation schemas
