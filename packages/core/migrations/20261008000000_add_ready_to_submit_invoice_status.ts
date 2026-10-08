@@ -21,8 +21,10 @@ const BASE_STATUSES = [
   'VOIDED',
 ];
 
-const toCheck = (statuses: string[]): string =>
-  `CHECK (status IN (${statuses.map((s) => `'${s}'`).join(', ')}))`;
+const toCheck = (statuses: string[]): string => {
+  const quoted = statuses.map((s) => "'" + s + "'").join(', ');
+  return `CHECK (status IN (${quoted}))`;
+};
 
 export async function up(knex: Knex): Promise<void> {
   await knex.raw('ALTER TABLE invoices DROP CONSTRAINT IF EXISTS chk_invoice_status');

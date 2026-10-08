@@ -54,8 +54,10 @@ describe('Visit Routes', () => {
           start_date: '2025-01-01',
           end_date: '2025-01-31',
         },
-        userContext: {
+        user: {
           userId: 'user-123',
+          email: 'user@example.com',
+          tokenVersion: 0,
           organizationId: 'org-123',
           branchIds: ['branch-123'],
           roles: ['CAREGIVER'],
@@ -224,8 +226,10 @@ describe('Visit Routes', () => {
           start_date: '2025-01-01',
           end_date: '2025-01-31',
         },
-        userContext: {
+        user: {
           userId: 'user-123',
+          email: 'user@example.com',
+          tokenVersion: 0,
           organizationId: 'org-123',
           branchIds: ['branch-123'],
           roles: ['COORDINATOR'],
@@ -268,9 +272,11 @@ describe('Visit Routes', () => {
     });
 
     it('should return 400 when organization_id is missing', async () => {
-      mockRequest.userContext = {
+      mockRequest.user = {
         userId: 'user-123',
-        organizationId: undefined,
+        email: 'user@example.com',
+        tokenVersion: 0,
+        organizationId: undefined as unknown as string, // token without an org claim
         branchIds: ['branch-123'],
         roles: ['COORDINATOR'],
         permissions: ['visits:read'],
@@ -295,8 +301,10 @@ describe('Visit Routes', () => {
     });
 
     it('should return 400 when organization_id is invalid UUID', async () => {
-      mockRequest.userContext = {
+      mockRequest.user = {
         userId: 'user-123',
+        email: 'user@example.com',
+        tokenVersion: 0,
         organizationId: 'invalid-uuid',
         branchIds: ['branch-123'],
         roles: ['COORDINATOR'],
@@ -331,8 +339,10 @@ describe('Visit Routes', () => {
           checkConflicts: true,
           checkCompliance: false, // Skip compliance checks in tests (not mocked)
         },
-        userContext: {
+        user: {
           userId: 'user-123',
+          email: 'user@example.com',
+          tokenVersion: 0,
           organizationId: '550e8400-e29b-41d4-a716-446655440000',
           branchIds: ['branch-123'],
           roles: ['COORDINATOR'],
@@ -497,8 +507,10 @@ describe('Visit Routes', () => {
           activitiesPerformed: ['MEAL_PREP', 'LIGHT_HOUSEKEEPING'],
           isIncident: false,
         },
-        userContext: {
+        user: {
           userId: 'user-123',
+          email: 'user@example.com',
+          tokenVersion: 0,
           organizationId: 'org-123',
           branchIds: ['branch-123'],
           roles: ['CAREGIVER'],

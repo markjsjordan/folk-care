@@ -4,7 +4,7 @@
  * List all audits with filtering and search capabilities
  */
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, Filter } from 'lucide-react';
 import { Button, LoadingSpinner, Card } from '@/core/components';
@@ -14,19 +14,11 @@ import type { AuditStatus } from '../types';
 
 export const AuditsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [statusFilter, setStatusFilter] = useState<AuditStatus | ''>(
-    (searchParams.get('status') as AuditStatus | null) || ''
-  );
-
-  // Re-sync statusFilter whenever the URL's status param changes (e.g.
-  // navigating between different "View All" links via client-side routing
-  // without a full page reload).
-  useEffect(() => {
-    setStatusFilter((searchParams.get('status') as AuditStatus | null) || '');
-  }, [searchParams]);
+  // The URL is the single source of truth, so the filter follows client-side
+  // navigation between "View All" links without extra state or effects.
+  const statusFilter: AuditStatus | '' = (searchParams.get('status') as AuditStatus | null) ?? '';
 
   const handleStatusFilterChange = (value: AuditStatus | '') => {
-    setStatusFilter(value);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       if (value) {
