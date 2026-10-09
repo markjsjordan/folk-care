@@ -496,7 +496,8 @@ export class FamilyEngagementService {
     if (!this.isStaffContext(context)) {
       if (familyMemberId !== context.userId) {
         const familyMember = await this.familyMemberRepo.findById(familyMemberId);
-        if (!familyMember || (familyMember.userId && familyMember.userId !== context.userId)) {
+        const fmUserId = familyMember?.userId;
+        if (!familyMember || (fmUserId && fmUserId !== context.userId)) {
           throw new Error('Insufficient permissions to view message threads') as PermissionError;
         }
       }
@@ -580,7 +581,8 @@ export class FamilyEngagementService {
       if (thread.familyMemberId !== context.userId) {
         // Also check if family member record has user_id matching context.userId
         const familyMember = await this.familyMemberRepo.findById(thread.familyMemberId);
-        if (!familyMember || (familyMember.userId && familyMember.userId !== context.userId)) {
+        const fmUserId = familyMember?.userId;
+        if (!familyMember || (fmUserId && fmUserId !== context.userId)) {
           throw new Error('Message thread not found') as NotFoundError;
         }
       }

@@ -66,6 +66,8 @@ export interface FamilyMember extends Entity {
   phoneNumber: string;
   preferredContactMethod: 'EMAIL' | 'PHONE' | 'SMS' | 'PORTAL';
 
+  userId?: UUID; // User account linked to family member
+
   // Portal access
   portalAccessLevel: PortalAccessLevel;
   accessGrantedBy: UUID; // Coordinator or admin who granted access
