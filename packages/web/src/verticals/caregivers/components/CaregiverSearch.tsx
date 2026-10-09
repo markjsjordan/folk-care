@@ -46,6 +46,24 @@ const complianceStatusOptions = [
 export const CaregiverSearch: React.FC<CaregiverSearchProps> = ({ filters, onFiltersChange }) => {
   const [showAdvanced, setShowAdvanced] = React.useState(false);
 
+  // Search input state with 300ms debounce
+  const [queryInput, setQueryInput] = React.useState(filters.query || '');
+  const [prevQuery, setPrevQuery] = React.useState(filters.query);
+
+  if (filters.query !== prevQuery) {
+    setPrevQuery(filters.query);
+    setQueryInput(filters.query || '');
+  }
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if ((filters.query || '') !== queryInput) {
+        onFiltersChange({ ...filters, query: queryInput || undefined });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [queryInput]);
+
   // Count active filters
   const activeFilterCount = React.useMemo(() => {
     let count = 0;
@@ -55,10 +73,11 @@ export const CaregiverSearch: React.FC<CaregiverSearchProps> = ({ filters, onFil
     return count;
   }, [filters]);
 
-  const hasAnyActiveFilter = Boolean(filters.query) || activeFilterCount > 0;
+  const hasAnyActiveFilter = Boolean(queryInput) || activeFilterCount > 0;
 
   // Clear all filters
   const handleClearFilters = () => {
+    setQueryInput('');
     onFiltersChange({});
   };
 
@@ -86,14 +105,14 @@ export const CaregiverSearch: React.FC<CaregiverSearchProps> = ({ filters, onFil
           <input
             type="text"
             placeholder="Search by name or employee number..."
-            value={filters.query || ''}
-            onChange={(e) => onFiltersChange({ ...filters, query: e.target.value })}
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
             className="w-full pl-10 pr-9 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
           />
-          {filters.query && (
+          {queryInput && (
             <button
               type="button"
-              onClick={() => onFiltersChange({ ...filters, query: undefined })}
+              onClick={() => setQueryInput('')}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
               aria-label="Clear search"
             >

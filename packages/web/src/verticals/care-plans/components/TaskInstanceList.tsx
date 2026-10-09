@@ -34,10 +34,12 @@ const TaskSearchFilters: React.FC<TaskSearchFiltersProps> = ({
   categoryOptions,
 }) => {
   const [queryInput, setQueryInput] = useState(filters.query || '');
+  const [prevQuery, setPrevQuery] = useState(filters.query);
 
-  useEffect(() => {
+  if (filters.query !== prevQuery) {
+    setPrevQuery(filters.query);
     setQueryInput(filters.query || '');
-  }, [filters.query]);
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => {
