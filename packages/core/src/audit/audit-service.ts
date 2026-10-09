@@ -4,7 +4,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { Database } from '../db/connection';
-import { UserContext, Timestamp } from '../types/base';
+import { UserContext, Timestamp, UUID } from '../types/base';
 
 export interface AuditEvent {
   eventId: string;
@@ -146,6 +146,28 @@ export class AuditService {
     if (metadata !== undefined) {
       eventData.metadata = metadata;
     }
+    await this.logEvent(context, eventData);
+  }
+
+  /**
+   * Log an admin impersonation ("login-as-caregiver") start/end event
+   */
+  async logImpersonationEvent(
+    context: UserContext,
+    action: 'IMPERSONATION_START' | 'IMPERSONATION_END',
+    targetUserId: UUID,
+    targetEmail: string,
+    sessionId: UUID,
+    metadata?: Record<string, unknown>
+  ): Promise<void> {
+    const eventData: CreateAuditEvent = {
+      eventType: 'SECURITY',
+      resource: 'USER_IMPERSONATION',
+      resourceId: targetUserId,
+      action,
+      result: 'SUCCESS',
+      metadata: { targetEmail, sessionId, ...metadata },
+    };
     await this.logEvent(context, eventData);
   }
 

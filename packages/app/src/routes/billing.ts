@@ -44,6 +44,7 @@ export function createBillingRouter(db: Database): Router {
 
   // All billing routes require authentication
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   /**
    * Load an invoice only if it belongs to the caller's organization.

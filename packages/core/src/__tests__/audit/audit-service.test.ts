@@ -354,6 +354,86 @@ describe('AuditService', () => {
     });
   });
 
+  describe('Impersonation Event Logging', () => {
+    it('should log IMPERSONATION_START event', async () => {
+      const mockResult = { rows: [], rowCount: 1, command: 'INSERT' as const, oid: 0, fields: [] };
+      mockDatabase.query.mockResolvedValue(mockResult);
+
+      await auditService.logImpersonationEvent(
+        mockUserContext,
+        'IMPERSONATION_START',
+        'caregiver-999',
+        'caregiver@example.com',
+        'session-abc',
+        { reason: 'support_request' }
+      );
+
+      expect(mockDatabase.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO audit_events'),
+        [
+          'test-audit-event-id',
+          expect.any(Date),
+          mockUserContext.userId,
+          mockUserContext.organizationId,
+          'SECURITY',
+          'USER_IMPERSONATION',
+          'caregiver-999',
+          'IMPERSONATION_START',
+          'SUCCESS',
+          JSON.stringify({
+            targetEmail: 'caregiver@example.com',
+            sessionId: 'session-abc',
+            reason: 'support_request',
+          }),
+          undefined,
+          undefined,
+        ]
+      );
+
+      const insertCall = mockDatabase.query.mock.calls[0];
+      const params = insertCall?.[1] as unknown[];
+      expect(params[4]).toBe('SECURITY');
+      expect(params[6]).toBe('caregiver-999');
+      expect(params[7]).toBe('IMPERSONATION_START');
+      const metadataJson = params[9] as string;
+      expect(JSON.parse(metadataJson)).toMatchObject({ sessionId: 'session-abc' });
+    });
+
+    it('should log IMPERSONATION_END event without extra metadata', async () => {
+      const mockResult = { rows: [], rowCount: 1, command: 'INSERT' as const, oid: 0, fields: [] };
+      mockDatabase.query.mockResolvedValue(mockResult);
+
+      await auditService.logImpersonationEvent(
+        mockUserContext,
+        'IMPERSONATION_END',
+        'caregiver-999',
+        'caregiver@example.com',
+        'session-abc'
+      );
+
+      expect(mockDatabase.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO audit_events'),
+        [
+          'test-audit-event-id',
+          expect.any(Date),
+          mockUserContext.userId,
+          mockUserContext.organizationId,
+          'SECURITY',
+          'USER_IMPERSONATION',
+          'caregiver-999',
+          'IMPERSONATION_END',
+          'SUCCESS',
+          JSON.stringify({
+            targetEmail: 'caregiver@example.com',
+            sessionId: 'session-abc',
+          }),
+          undefined,
+          undefined,
+        ]
+      );
+    });
+  });
+
   describe('Audit Trail Retrieval', () => {
     it('should get audit trail for a resource', async () => {
       const mockEvents = [

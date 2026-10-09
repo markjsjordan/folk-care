@@ -17,6 +17,7 @@ export function createMobileRouter(db: Database): Router {
 
   // All mobile routes require authentication
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   router.get('/mobile/caregiver/today', async (req: Request, res: Response): Promise<void> => {
     try {

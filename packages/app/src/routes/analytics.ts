@@ -25,6 +25,7 @@ export function createAnalyticsRouter(db: Database): Router {
 
   // All routes require authentication with proper JWT verification
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   /**
    * GET /api/analytics/kpis
