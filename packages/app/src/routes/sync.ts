@@ -17,7 +17,9 @@ export function createSyncRouter(db: Database): Router {
 
   // All sync routes require authentication
   router.use(authMiddleware.requireAuth);
-  router.use(authMiddleware.auditImpersonatedActions);
+  if (authMiddleware.auditImpersonatedActions) {
+    router.use((req, res, next) => authMiddleware.auditImpersonatedActions(req, res, next));
+  }
 
   router.get('/sync/changes', async (req: Request, res: Response): Promise<void> => {
     try {

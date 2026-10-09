@@ -101,7 +101,7 @@ export function createAIRoutes(_db: Database): Router {
         res.status(400).json({
           success: false,
           error: 'Validation error',
-          details: error.issues,
+          details: (error as z.ZodError).issues,
         });
       } else {
         console.error('Error summarizing note:', error);
@@ -133,7 +133,7 @@ export function createAIRoutes(_db: Database): Router {
         res.status(400).json({
           success: false,
           error: 'Validation error',
-          details: error.issues,
+          details: (error as z.ZodError).issues,
         });
       } else {
         console.error('Error in batch summarization:', error);
@@ -165,7 +165,7 @@ export function createAIRoutes(_db: Database): Router {
         res.status(400).json({
           success: false,
           error: 'Validation error',
-          details: error.issues,
+          details: (error as z.ZodError).issues,
         });
       } else {
         console.error('Error generating daily summary:', error);
@@ -197,7 +197,7 @@ export function createAIRoutes(_db: Database): Router {
         res.status(400).json({
           success: false,
           error: 'Validation error',
-          details: error.issues,
+          details: (error as z.ZodError).issues,
         });
       } else {
         console.error('Error extracting keywords:', error);

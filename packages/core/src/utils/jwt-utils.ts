@@ -28,6 +28,7 @@ export interface TokenPayload {
     adminEmail: string;
     impersonatedAt: string;
     reason?: string;
+    sessionId?: string;
   };
 }
 

@@ -111,7 +111,9 @@ export function createVisitRouter(db: Database): Router {
 
   // All routes require authentication
   router.use(authMiddleware.requireAuth);
-  router.use(authMiddleware.auditImpersonatedActions);
+  if (authMiddleware.auditImpersonatedActions) {
+    router.use((req: Request, res: Response, next: NextFunction) => authMiddleware.auditImpersonatedActions(req, res, next));
+  }
 
   /**
    * GET /api/visits/my-visits

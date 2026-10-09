@@ -49,7 +49,9 @@ export function createVisitNotesRouter(db: Database): Router {
   const router = Router();
   const authMiddleware = new AuthMiddleware(db);
   router.use(authMiddleware.requireAuth);
-  router.use(authMiddleware.auditImpersonatedActions);
+  if (authMiddleware.auditImpersonatedActions) {
+    router.use((req: Request, res: Response, next: NextFunction) => authMiddleware.auditImpersonatedActions(req, res, next));
+  }
 
   const aiService = new NoteSummarizationService({
     anthropicApiKey: process.env['ANTHROPIC_API_KEY'] ?? '',
