@@ -1,6 +1,6 @@
 import React from 'react';
-import { Search, Filter } from 'lucide-react';
-import { Input, Select, Button } from '@/core/components';
+import { Search, Filter, X, RotateCcw } from 'lucide-react';
+import { Input, Select } from '@/core/components';
 import type { CarePlanSearchFilters, CarePlanStatus, CarePlanType, ComplianceStatus } from '../types';
 
 export interface CarePlanSearchProps {
@@ -42,31 +42,103 @@ const complianceOptions = [
 export const CarePlanSearch: React.FC<CarePlanSearchProps> = ({ filters, onFiltersChange }) => {
   const [showAdvanced, setShowAdvanced] = React.useState(false);
 
+  // Search input state with 300ms debounce
+  const [queryInput, setQueryInput] = React.useState(filters.query || '');
+
+  React.useEffect(() => {
+    setQueryInput(filters.query || '');
+  }, [filters.query]);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if ((filters.query || '') !== queryInput) {
+        onFiltersChange({ ...filters, query: queryInput || undefined });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [queryInput]);
+
+  // Count active filters
+  const activeFilterCount = React.useMemo(() => {
+    let count = 0;
+    if (filters.status && filters.status.length > 0) count++;
+    if (filters.planType && filters.planType.length > 0) count++;
+    if (filters.complianceStatus && filters.complianceStatus.length > 0) count++;
+    if (filters.coordinatorId?.trim()) count++;
+    if (filters.clientId?.trim()) count++;
+    if (filters.organizationId?.trim()) count++;
+    if (filters.branchId?.trim()) count++;
+    if (filters.expiringWithinDays !== undefined) count++;
+    return count;
+  }, [filters]);
+
+  const hasAnyActiveFilter = Boolean(queryInput) || activeFilterCount > 0;
+
+  const handleClearFilters = () => {
+    setQueryInput('');
+    onFiltersChange({});
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex gap-4">
-        <div className="flex-1 relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-gray-400" />
-          </div>
-          <Input
+    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        {/* Search Input styled uniform with Client and Caregiver search */}
+        <div className="relative flex-1 max-w-lg">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
             placeholder="Search by name, plan number, or client ID..."
-            value={filters.query || ''}
-            onChange={(e) => onFiltersChange({ ...filters, query: e.target.value })}
-            className="pl-10"
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
+            className="w-full pl-10 pr-9 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
           />
+          {queryInput && (
+            <button
+              type="button"
+              onClick={() => setQueryInput('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+              aria-label="Clear search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          leftIcon={<Filter className="h-4 w-4" />}
-        >
-          Filters
-        </Button>
+
+        {/* Filter Toggle & Clear Buttons */}
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              showAdvanced || activeFilterCount > 0
+                ? 'border-blue-500 bg-blue-50/50 text-blue-700'
+                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Filter className="w-4 h-4" />
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full min-w-5 h-5">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          {hasAnyActiveFilter && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-gray-200"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Clear All</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {showAdvanced && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-md">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-3 border-t border-gray-100">
           <Select
             label="Status"
             options={statusOptions}
