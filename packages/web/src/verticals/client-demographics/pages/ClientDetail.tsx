@@ -143,24 +143,45 @@ export const ClientDetail: React.FC = () => {
                     <p className="text-sm text-gray-900">{client.email}</p>
                   </div>
                 )}
-                <div className="flex items-start gap-3">
-                  <MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-gray-900">{client.primaryAddress.line1}</p>
-                    {client.primaryAddress.line2 && (
-                      <p className="text-sm text-gray-900">{client.primaryAddress.line2}</p>
-                    )}
-                    <p className="text-sm text-gray-900">
-                      {client.primaryAddress.city}, {client.primaryAddress.state}{' '}
-                      {client.primaryAddress.postalCode}
-                    </p>
+                {client.primaryAddress ? (
+                  <div className="flex items-start gap-3">
+                    <MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-gray-900">{client.primaryAddress.line1}</p>
+                      {client.primaryAddress.line2 && (
+                        <p className="text-sm text-gray-900">{client.primaryAddress.line2}</p>
+                      )}
+                      <p className="text-sm text-gray-900">
+                        {client.primaryAddress.city}, {client.primaryAddress.state}{' '}
+                        {client.primaryAddress.postalCode}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                ) : (client as { address?: { line1?: string; street?: string; city?: string; state?: string; postalCode?: string; zip?: string } }).address ? (
+                  <div className="flex items-start gap-3">
+                    <MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-gray-900">
+                        {(client as { address?: { line1?: string; street?: string } }).address?.line1 || (client as { address?: { line1?: string; street?: string } }).address?.street}
+                      </p>
+                      <p className="text-sm text-gray-900">
+                        {(client as { address?: { city?: string; state?: string; postalCode?: string; zip?: string } }).address?.city},{' '}
+                        {(client as { address?: { city?: string; state?: string; postalCode?: string; zip?: string } }).address?.state}{' '}
+                        {(client as { address?: { city?: string; state?: string; postalCode?: string; zip?: string } }).address?.postalCode || (client as { address?: { city?: string; state?: string; postalCode?: string; zip?: string } }).address?.zip}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3">
+                    <MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
+                    <p className="text-sm text-gray-500">No address on file</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          {client.emergencyContacts.length > 0 && (
+          {client.emergencyContacts && client.emergencyContacts.length > 0 && (
             <Card>
               <CardHeader title="Emergency Contacts" />
               <CardContent>
