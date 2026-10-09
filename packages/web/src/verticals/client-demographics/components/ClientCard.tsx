@@ -45,10 +45,17 @@ export const ClientCard: React.FC<ClientCardProps> = ({ client, compact = false 
                 {client.email}
               </div>
             )}
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <MapPin className="h-4 w-4" />
-              {client.primaryAddress.city}, {client.primaryAddress.state}
-            </div>
+            {client.primaryAddress ? (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <MapPin className="h-4 w-4" />
+                {client.primaryAddress.city}, {client.primaryAddress.state}
+              </div>
+            ) : (client as { address?: { city?: string; state?: string } }).address ? (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <MapPin className="h-4 w-4" />
+                {(client as { address?: { city?: string; state?: string } }).address?.city}, {(client as { address?: { city?: string; state?: string } }).address?.state}
+              </div>
+            ) : null}
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Calendar className="h-4 w-4" />
               DOB: {formatDate(client.dateOfBirth)}
