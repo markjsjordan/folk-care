@@ -54,6 +54,7 @@ export function createNaturalLanguageCarePlanRoutes(db: Database): Router {
 
   // Require authentication for all routes
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   /**
    * POST /api/care-plans/generate

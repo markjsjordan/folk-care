@@ -72,6 +72,7 @@ function createCarePlanRouter(handlers: ReturnType<typeof createCarePlanHandlers
 
   // All care plan routes require authentication
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   // Care Plan endpoints
   router.post('/care-plans', handlers.createCarePlan);
@@ -125,6 +126,7 @@ function createMedicationRouter(handlers: ReturnType<typeof createMedicationHand
 
   // All medication routes require authentication
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   // Client medication endpoints
   router.get('/clients/:clientId/medications', handlers.getClientMedications);
@@ -178,6 +180,7 @@ function createFamilyEngagementRouter(handlers: ReturnType<typeof createFamilyEn
 
   // All family engagement routes require authentication
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   // Family Member Management endpoints
   router.post('/family-engagement/family-members/invite', handlers.inviteFamilyMember);

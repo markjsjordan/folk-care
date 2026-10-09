@@ -76,7 +76,7 @@ export const ClientDashboard: React.FC = () => {
           </p>
         </div>
         {can('clients:write') && (
-          <Link to="/clients/new">
+          <Link to="/clients/new/intake">
             <Button leftIcon={<Plus className="h-4 w-4" />}>
               New Client
             </Button>
@@ -92,7 +92,7 @@ export const ClientDashboard: React.FC = () => {
           description="Adjust your filters or create a new client."
           action={
             can('clients:write') ? (
-              <Link to="/clients/new">
+              <Link to="/clients/new/intake">
                 <Button leftIcon={<Plus className="h-4 w-4" />}>
                   Create Client
                 </Button>

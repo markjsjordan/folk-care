@@ -247,7 +247,7 @@ export const DEFAULT_GO_LIVE_CHECKLIST: Omit<GoLiveChecklistItem, 'status' | 'co
     description: 'Create your first client profile with demographics',
     required: true,
     autoVerifiable: true,
-    actionUrl: '/clients/new',
+    actionUrl: '/clients/new/intake',
   },
   {
     id: 'client_authorization_added',

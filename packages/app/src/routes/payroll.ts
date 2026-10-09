@@ -45,6 +45,7 @@ export function createPayrollRouter(db: Database): Router {
   // combined with handlers reading userId straight from that same spoofable
   // header made every payroll mutation route trivially exploitable.
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   /**
    * GET /api/payroll/periods
