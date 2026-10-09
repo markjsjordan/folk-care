@@ -66,6 +66,8 @@ export interface FamilyMember extends Entity {
   phoneNumber: string;
   preferredContactMethod: 'EMAIL' | 'PHONE' | 'SMS' | 'PORTAL';
 
+  userId?: UUID; // User account linked to family member
+
   // Portal access
   portalAccessLevel: PortalAccessLevel;
   accessGrantedBy: UUID; // Coordinator or admin who granted access
@@ -501,6 +503,22 @@ export interface CreateMessageThreadInput {
 /**
  * Input for sending message in thread
  */
+/**
+ * Thread row enriched for the staff inbox
+ */
+export interface StaffMessageThread extends MessageThread {
+  familyMemberName: string;
+  familyMemberRelationship: string;
+}
+
+/**
+ * Staff-side thread triage changes
+ */
+export interface UpdateMessageThreadInput {
+  status?: 'OPEN' | 'CLOSED';
+  assignedToUserId?: UUID | null;
+}
+
 export interface SendMessageInput {
   threadId: UUID;
   messageText: string;

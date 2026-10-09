@@ -277,7 +277,9 @@ export function createFamilyEngagementHandlers(service: FamilyEngagementService)
     async sendMessage(req: Request, res: Response) {
       try {
         const context = getUserContext(req);
-        const senderType = req.body.senderType || 'STAFF';
+        // Derive sender type from authenticated roles; never trust the request body.
+        const roles = context.roles as string[];
+        const senderType = roles.some((r) => r === 'FAMILY' || r === 'CLIENT') ? 'FAMILY' : 'STAFF';
 
         const message = await service.sendMessage(
           {
@@ -290,6 +292,40 @@ export function createFamilyEngagementHandlers(service: FamilyEngagementService)
         res.status(201).json(message);
       } catch (error: unknown) {
         handleError(error, res, 'sending message');
+      }
+    },
+
+    /**
+     * GET /messages/inbox?status=OPEN|CLOSED
+     * Staff inbox of family conversations
+     */
+    async getStaffInbox(req: Request, res: Response) {
+      try {
+        const context = getUserContext(req);
+        const raw = req.query['status'];
+        const status = raw === 'OPEN' || raw === 'CLOSED' ? raw : undefined;
+        res.json(await service.getStaffInbox(context, status));
+      } catch (error: unknown) {
+        handleError(error, res, 'fetching staff inbox');
+      }
+    },
+
+    /**
+     * PATCH /messages/threads/:threadId
+     * Close/reopen or assign a thread
+     */
+    async updateMessageThread(req: Request, res: Response) {
+      try {
+        const context = getUserContext(req);
+        const { status, assignedToUserId } = req.body ?? {};
+        const changes: { status?: 'OPEN' | 'CLOSED'; assignedToUserId?: string | null } = {};
+        if (status === 'OPEN' || status === 'CLOSED') changes.status = status;
+        if (assignedToUserId === null || typeof assignedToUserId === 'string') {
+          changes.assignedToUserId = assignedToUserId;
+        }
+        res.json(await service.updateThread(req.params['threadId'] as string, changes, context));
+      } catch (error: unknown) {
+        handleError(error, res, 'updating message thread');
       }
     },
 
