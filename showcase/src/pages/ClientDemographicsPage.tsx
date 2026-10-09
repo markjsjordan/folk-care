@@ -1,17 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ShowcaseLayout } from '../components/ShowcaseLayout';
 import { useClientProvider } from '@/core/providers/context';
-import { Plus, Search, Mail, Phone, MapPin } from 'lucide-react';
+import { Plus, Search, Mail, Phone, MapPin, X, RotateCcw } from 'lucide-react';
+import type { ClientSearchFilters } from '../types/showcase-types.js';
+import { ClientFiltersComponent } from '../components/clients/ClientFiltersComponent.js';
 
 export const ClientDemographicsPage: React.FC = () => {
   const clientProvider = useClientProvider();
+  
+  // Search state with 300ms debounce
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['clients', { query: searchQuery }],
-    queryFn: () => clientProvider.getClients({ query: searchQuery }),
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Advanced dropdown filters
+  const [advancedFilters, setAdvancedFilters] = useState<ClientSearchFilters>({});
+
+  const activeAdvancedFilterCount = useMemo(() => {
+    return advancedFilters.status?.length || 0;
+  }, [advancedFilters]);
+
+  const hasAnyActiveFilter = Boolean(debouncedSearch) || activeAdvancedFilterCount > 0;
+
+  const handleClearAllFilters = () => {
+    setSearchQuery('');
+    setDebouncedSearch('');
+    setAdvancedFilters({});
+  };
+
+  const { data: rawData, isLoading, error } = useQuery({
+    queryKey: ['clients', debouncedSearch],
+    queryFn: () => clientProvider.getClients({ query: debouncedSearch || undefined }),
   });
+
+  // Filter items by status if status filter active
+  const data = useMemo(() => {
+    if (!rawData) return rawData;
+    if (!advancedFilters.status || advancedFilters.status.length === 0) return rawData;
+    const filteredItems = rawData.items.filter(c => advancedFilters.status?.includes(c.status));
+    return {
+      ...rawData,
+      items: filteredItems,
+      total: filteredItems.length,
+    };
+  }, [rawData, advancedFilters.status]);
 
   const calculateAge = (dateOfBirth: string) => {
     const today = new Date();
@@ -42,25 +81,62 @@ export const ClientDemographicsPage: React.FC = () => {
       title="Client Demographics"
       description="Comprehensive client profiles with demographics, contact information, and medical details"
     >
-      {/* Search and Actions */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-md" data-tour="client-search">
-          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search clients..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-md border border-gray-300 pl-10 pr-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+      {/* Header Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-4 mb-4">
         <button 
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 shadow-sm transition-colors"
           data-tour="add-client"
         >
           <Plus className="h-4 w-4" />
           Add Client
         </button>
+      </div>
+
+      {/* Search and Filter Toolbar styled like Schedule page */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Search Bar with 300ms debounce */}
+          <div className="relative flex-1 max-w-lg" data-tour="client-search">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search clients..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-9 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Filter Dropdown + Clear All */}
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+            <ClientFiltersComponent
+              filters={advancedFilters}
+              onFiltersChange={setAdvancedFilters}
+              activeCount={activeAdvancedFilterCount}
+            />
+
+            {hasAnyActiveFilter && (
+              <button
+                type="button"
+                onClick={handleClearAllFilters}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-gray-200"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Clear All</span>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Stats */}
@@ -156,34 +232,13 @@ export const ClientDemographicsPage: React.FC = () => {
                 )}
                 {client.primaryAddress && (
                   <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <MapPin className="h-4 w-4 text-gray-400" />
+                    <MapPin className="h-4 w-4 text-gray-400 flex-shrink-0" />
                     <span className="truncate">
                       {client.primaryAddress.city}, {client.primaryAddress.stateCode}
                     </span>
                   </div>
                 )}
               </div>
-
-              {(client.medicaidNumber || client.medicareNumber) && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <p className="text-xs text-gray-500">
-                    {client.medicaidNumber && <span>Medicaid: {client.medicaidNumber}</span>}
-                    {client.medicaidNumber && client.medicareNumber && <span> • </span>}
-                    {client.medicareNumber && <span>Medicare: {client.medicareNumber}</span>}
-                  </p>
-                </div>
-              )}
-
-              {client.emergencyContacts && client.emergencyContacts.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <p className="text-xs font-medium text-gray-700 mb-1">Emergency Contact</p>
-                  <p className="text-xs text-gray-600">
-                    {client.emergencyContacts[0].name} ({client.emergencyContacts[0].relationship})
-                    <br />
-                    {client.emergencyContacts[0].phone}
-                  </p>
-                </div>
-              )}
             </div>
           ))}
         </div>
