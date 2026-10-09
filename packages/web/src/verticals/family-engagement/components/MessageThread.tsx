@@ -10,9 +10,11 @@ import type { Message } from '@folkcare/family-engagement';
 interface MessageThreadProps {
   messages: Message[];
   loading?: boolean;
+  /** Whose perspective we render from; staff see family on the left and internal notes flagged. */
+  viewer?: 'FAMILY' | 'STAFF';
 }
 
-export const MessageThread: React.FC<MessageThreadProps> = ({ messages, loading }) => {
+export const MessageThread: React.FC<MessageThreadProps> = ({ messages, loading, viewer = 'FAMILY' }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,6 +55,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({ messages, loading 
     <div className="space-y-4 p-4">
       {messages.map((message) => {
         const isFromFamily = message.senderType === 'FAMILY';
+        const isMine = viewer === 'FAMILY' ? isFromFamily : !isFromFamily;
         const timestamp = new Date(message.createdAt).toLocaleString('en-US', {
           month: 'short',
           day: 'numeric',
@@ -63,16 +66,19 @@ export const MessageThread: React.FC<MessageThreadProps> = ({ messages, loading 
         return (
           <div
             key={message.id}
-            className={`flex ${isFromFamily ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
           >
-            <div className={`max-w-md ${isFromFamily ? 'text-right' : 'text-left'}`}>
+            <div className={`max-w-md ${isMine ? 'text-right' : 'text-left'}`}>
               <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
-                {!isFromFamily && <span className="font-medium">{message.senderName}</span>}
+                {!isMine && <span className="font-medium">{message.senderName}</span>}
+                {message.isInternal && (
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">Internal</span>
+                )}
                 <span>{timestamp}</span>
               </div>
               <div
                 className={`rounded-lg px-4 py-3 shadow-sm ${
-                  isFromFamily
+                  isMine
                     ? 'bg-blue-600 text-white'
                     : 'bg-white border border-gray-200 text-gray-900'
                 }`}

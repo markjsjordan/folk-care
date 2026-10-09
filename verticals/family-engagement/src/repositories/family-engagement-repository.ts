@@ -16,7 +16,8 @@ import type {
   InviteFamilyMemberInput,
   SendNotificationInput,
   CreateMessageThreadInput,
-  SendMessageInput
+  SendMessageInput,
+  StaffMessageThread
 } from '../types/family-engagement';
 
 /**
@@ -571,16 +572,119 @@ export class MessageRepository {
   /**
    * Get messages in thread
    */
-  async getMessagesInThread(threadId: UUID): Promise<Message[]> {
+  async getMessagesInThread(threadId: UUID, includeInternal = false): Promise<Message[]> {
     const query = `
       SELECT * FROM messages
       WHERE thread_id = $1
-      AND is_internal = false
+      ${includeInternal ? '' : 'AND is_internal = false'}
       ORDER BY created_at ASC
     `;
 
     const result = await this.database.query(query, [threadId]);
     return result.rows.map(row => this.mapRowToMessage(row));
+  }
+
+  /**
+   * Get thread by ID, scoped to an organization (tenant isolation).
+   */
+  async getThreadByIdForOrganization(
+    threadId: UUID,
+    organizationId: UUID
+  ): Promise<MessageThread | null> {
+    const result = await this.database.query(
+      `SELECT * FROM message_threads
+       WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL`,
+      [threadId, organizationId]
+    );
+    return result.rows[0] ? this.mapRowToThread(result.rows[0]) : null;
+  }
+
+  /**
+   * Staff inbox: threads visible to a staff member, newest first.
+   * Scope is resolved by the service (org-wide, branch-limited, or assigned-only).
+   */
+  async getStaffInbox(
+    organizationId: UUID,
+    scope: { branchIds?: UUID[]; assignedToUserId?: UUID },
+    status?: 'OPEN' | 'CLOSED'
+  ): Promise<StaffMessageThread[]> {
+    const params: unknown[] = [organizationId];
+    let where = 'mt.organization_id = $1 AND mt.deleted_at IS NULL';
+    if (scope.branchIds) {
+      params.push(scope.branchIds);
+      where += ` AND mt.branch_id = ANY($${params.length}::uuid[])`;
+    }
+    if (scope.assignedToUserId) {
+      params.push(scope.assignedToUserId);
+      where += ` AND mt.assigned_to_user_id = $${params.length}`;
+    }
+    if (status) {
+      params.push(status);
+      where += ` AND mt.status = $${params.length}`;
+    } else {
+      where += " AND mt.status != 'ARCHIVED'";
+    }
+
+    const result = await this.database.query(
+      `SELECT mt.*, fm.first_name AS fm_first_name, fm.last_name AS fm_last_name,
+              fm.relationship AS fm_relationship
+       FROM message_threads mt
+       JOIN family_members fm ON fm.id = mt.family_member_id
+       WHERE ${where}
+       ORDER BY mt.unread_count_staff DESC, mt.last_message_at DESC
+       LIMIT 200`,
+      params
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return result.rows.map((row: any) => ({
+      ...this.mapRowToThread(row),
+      familyMemberName: `${row.fm_first_name} ${row.fm_last_name}`.trim(),
+      familyMemberRelationship: row.fm_relationship,
+    }));
+  }
+
+  /**
+   * Staff opened a thread: clear the staff unread counter and mark family
+   * messages as read.
+   */
+  async markThreadReadByStaff(threadId: UUID, staffUserId: UUID): Promise<void> {
+    await this.database.query(
+      `UPDATE message_threads SET unread_count_staff = 0 WHERE id = $1`,
+      [threadId]
+    );
+    await this.database.query(
+      `UPDATE messages
+       SET status = 'READ', read_at = COALESCE(read_at, NOW()),
+           read_by = array_append(COALESCE(read_by, ARRAY[]::uuid[]), $2::uuid)
+       WHERE thread_id = $1 AND sender_type = 'FAMILY' AND status != 'READ'`,
+      [threadId, staffUserId]
+    );
+  }
+
+  /**
+   * Update thread status / assignment (staff triage).
+   */
+  async updateThread(
+    threadId: UUID,
+    updatedBy: UUID,
+    changes: { status?: 'OPEN' | 'CLOSED'; assignedToUserId?: UUID | null }
+  ): Promise<MessageThread | null> {
+    const sets: string[] = ['updated_at = NOW()', 'updated_by = $2'];
+    const params: unknown[] = [threadId, updatedBy];
+    if (changes.status) {
+      params.push(changes.status);
+      sets.push(`status = $${params.length}`);
+    }
+    if (changes.assignedToUserId !== undefined) {
+      params.push(changes.assignedToUserId);
+      sets.push(`assigned_to_user_id = $${params.length}`);
+    }
+    const result = await this.database.query(
+      `UPDATE message_threads SET ${sets.join(', ')} WHERE id = $1 RETURNING *`,
+      params
+    );
+    return result.rows[0] ? this.mapRowToThread(result.rows[0]) : null;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

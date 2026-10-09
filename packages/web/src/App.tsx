@@ -24,6 +24,7 @@ import {
   FamilySettings,
   ActivityPage,
   MessagesPage,
+  StaffMessagesPage,
   NotificationsPage,
   SchedulePage,
   CarePlanPage,
@@ -824,6 +825,26 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppShell>
               <Settings />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/messages"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <StaffMessagesPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/messages/:threadId"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <StaffMessagesPage />
             </AppShell>
           </ProtectedRoute>
         }
