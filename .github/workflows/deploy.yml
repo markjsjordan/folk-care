@@ -89,7 +89,7 @@ jobs:
           while [ $attempt -le $max_attempts ]; do
             echo "📦 Installing dependencies (attempt $attempt/$max_attempts)..."
 
-            if npm ci; then
+            if npm ci || npm install; then
               echo "✅ Dependencies installed successfully"
               exit 0
             fi
