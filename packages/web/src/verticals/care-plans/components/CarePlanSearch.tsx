@@ -44,10 +44,12 @@ export const CarePlanSearch: React.FC<CarePlanSearchProps> = ({ filters, onFilte
 
   // Search input state with 300ms debounce
   const [queryInput, setQueryInput] = React.useState(filters.query || '');
+  const [prevQuery, setPrevQuery] = React.useState(filters.query);
 
-  React.useEffect(() => {
+  if (filters.query !== prevQuery) {
+    setPrevQuery(filters.query);
     setQueryInput(filters.query || '');
-  }, [filters.query]);
+  }
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
