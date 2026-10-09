@@ -16,6 +16,7 @@ import express, { Express } from 'express';
 import request from 'supertest';
 import type { Database } from '@folkcare/core';
 import { createVisitRouter } from '../visits.js';
+import { errorHandler } from '../../middleware/error-handler.js';
 
 const FIXED_DATE = '2026-10-15';
 const ORG_ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -99,6 +100,7 @@ describe('Visit Patterns Endpoints (FC-SCHED-002)', () => {
 
     const visitRouter = createVisitRouter(mockDb);
     app.use('/api/visits', visitRouter);
+    app.use(errorHandler);
   });
 
   describe('POST /api/visits/patterns', () => {

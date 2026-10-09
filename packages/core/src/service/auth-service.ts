@@ -667,23 +667,30 @@ export class AuthService {
    * @throws AuthenticationError if rate limit exceeded
    */
   private async checkRateLimit(email: string): Promise<void> {
-    const result = await this.db.query<{ attempt_count: number }>(
-      `SELECT COUNT(*) as attempt_count
-       FROM auth_events
-       WHERE email = $1
-         AND timestamp > NOW() - INTERVAL '${AuthService.RATE_LIMIT_WINDOW_MINUTES} minutes'
-         AND result = 'FAILED'
-         AND (failure_reason = 'Invalid credentials' OR failure_reason = 'Invalid password')`,
-      [email]
-    );
-
-    const attemptCount = Number(result.rows[0]?.attempt_count ?? 0);
-
-    if (attemptCount >= AuthService.MAX_ATTEMPTS_PER_WINDOW) {
-      throw new AuthenticationError(
-        `Too many login attempts. Please try again in ${AuthService.RATE_LIMIT_WINDOW_MINUTES} minutes.`,
-        { attemptCount, windowMinutes: AuthService.RATE_LIMIT_WINDOW_MINUTES }
+    try {
+      const result = await this.db.query<{ attempt_count: number }>(
+        `SELECT COUNT(*) as attempt_count
+         FROM auth_events
+         WHERE email = $1
+           AND timestamp > NOW() - INTERVAL '${AuthService.RATE_LIMIT_WINDOW_MINUTES} minutes'
+           AND result = 'FAILED'
+           AND (failure_reason = 'Invalid credentials' OR failure_reason = 'Invalid password')`,
+        [email]
       );
+
+      const attemptCount = Number(result.rows[0]?.attempt_count ?? 0);
+
+      if (attemptCount >= AuthService.MAX_ATTEMPTS_PER_WINDOW) {
+        throw new AuthenticationError(
+          `Too many login attempts. Please try again in ${AuthService.RATE_LIMIT_WINDOW_MINUTES} minutes.`,
+          { attemptCount, windowMinutes: AuthService.RATE_LIMIT_WINDOW_MINUTES }
+        );
+      }
+    } catch (error) {
+      if (error instanceof AuthenticationError) {
+        throw error;
+      }
+      console.warn('[AuthService] checkRateLimit query failed:', error);
     }
   }
 
@@ -701,12 +708,16 @@ export class AuthService {
     userAgent?: string,
     reason?: string
   ): Promise<void> {
-    await this.db.query(
-      `INSERT INTO auth_events (
-        event_type, auth_method, email, ip_address, user_agent, result, failure_reason
-      ) VALUES ($1, $2, $3, $4, $5, 'FAILED', $6)`,
-      ['LOGIN_FAILED', 'PASSWORD', email, ipAddress, userAgent, reason]
-    );
+    try {
+      await this.db.query(
+        `INSERT INTO auth_events (
+          id, event_type, auth_method, email, ip_address, user_agent, result, failure_reason
+        ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'FAILED', $6)`,
+        ['LOGIN_FAILED', 'PASSWORD', email, ipAddress, userAgent, reason]
+      );
+    } catch (error) {
+      console.warn('[AuthService] recordFailedLogin audit logging failed:', error);
+    }
   }
 
   /**
@@ -729,11 +740,15 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string
   ): Promise<void> {
-    await this.db.query(
-      `INSERT INTO auth_events (
-        id, user_id, event_type, auth_method, result, failure_reason, ip_address, user_agent
-      ) VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, $6, $7)`,
-      [userId, eventType, authMethod, result, failureReason, ipAddress, userAgent]
-    );
+    try {
+      await this.db.query(
+        `INSERT INTO auth_events (
+          id, user_id, event_type, auth_method, result, failure_reason, ip_address, user_agent
+        ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)`,
+        [userId, eventType, authMethod, result, failureReason, ipAddress, userAgent]
+      );
+    } catch (error) {
+      console.warn('[AuthService] logAuthEvent audit logging failed:', error);
+    }
   }
 }

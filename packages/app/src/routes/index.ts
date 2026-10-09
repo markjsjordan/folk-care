@@ -153,11 +153,9 @@ function createIncidentRouter(handlers: ReturnType<typeof createIncidentHandlers
   const router = Router();
   const authMiddleware = new AuthMiddleware(db);
 
-  // Public GET endpoints (no authentication required)
-  router.get('/incidents', handlers.searchIncidents);
-  router.get('/incidents/:incidentId', handlers.getIncident);
-
-  // Protected write endpoints (require authentication)
+  // Incident endpoints (require authentication)
+  router.get('/incidents', authMiddleware.requireAuth, handlers.searchIncidents);
+  router.get('/incidents/:incidentId', authMiddleware.requireAuth, handlers.getIncident);
   router.post('/incidents', authMiddleware.requireAuth, handlers.createIncident);
   router.patch('/incidents/:incidentId', authMiddleware.requireAuth, handlers.updateIncident);
 

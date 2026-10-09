@@ -174,3 +174,12 @@
     border-radius: 4px;
   }
 }
+
+/* Background overlay utility */
+.bg-opacity-50 {
+  /* Standard dark overlay with 50% opacity */
+  background-color: rgba(0, 0, 0, 0.5);
+  /* If using Tailwind CSS variables, you can also set */
+  /* --tw-bg-opacity: 0.5; */
+  /* Or modern slash syntax: background-color: rgb(0 0 0 / 50%); */
+}

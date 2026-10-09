@@ -132,22 +132,29 @@ export class PasswordResetService {
       return; // No IP address provided, skip rate limiting
     }
 
-    const result = await this.database.query<{ attempt_count: number }>(
-      `SELECT COUNT(*) as attempt_count
-       FROM auth_events
-       WHERE ip_address = $1
-         AND timestamp > NOW() - INTERVAL '${PasswordResetService.RATE_LIMIT_WINDOW_MINUTES} minutes'
-         AND event_type = 'PASSWORD_RESET_FAILED'
-         AND result = 'FAILED'`,
-      [ipAddress]
-    );
-
-    const attemptCount = Number(result.rows[0]?.attempt_count ?? 0);
-
-    if (attemptCount >= PasswordResetService.MAX_TOKEN_VALIDATION_ATTEMPTS) {
-      throw new Error(
-        `Too many password reset attempts. Please try again in ${PasswordResetService.RATE_LIMIT_WINDOW_MINUTES} minutes.`
+    try {
+      const result = await this.database.query<{ attempt_count: number }>(
+        `SELECT COUNT(*) as attempt_count
+         FROM auth_events
+         WHERE ip_address = $1
+           AND timestamp > NOW() - INTERVAL '${PasswordResetService.RATE_LIMIT_WINDOW_MINUTES} minutes'
+           AND event_type = 'PASSWORD_RESET_FAILED'
+           AND result = 'FAILED'`,
+        [ipAddress]
       );
+
+      const attemptCount = Number(result.rows[0]?.attempt_count ?? 0);
+
+      if (attemptCount >= PasswordResetService.MAX_TOKEN_VALIDATION_ATTEMPTS) {
+        throw new Error(
+          `Too many password reset attempts. Please try again in ${PasswordResetService.RATE_LIMIT_WINDOW_MINUTES} minutes.`
+        );
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('Too many password reset attempts')) {
+        throw error;
+      }
+      console.warn('[PasswordResetService] checkTokenValidationRateLimit query failed:', error);
     }
   }
 
@@ -161,12 +168,16 @@ export class PasswordResetService {
     ipAddress?: string,
     userAgent?: string
   ): Promise<void> {
-    await this.database.query(
-      `INSERT INTO auth_events (
-        event_type, auth_method, ip_address, user_agent, result, failure_reason
-      ) VALUES ($1, 'PASSWORD', $2, $3, 'FAILED', 'Invalid or expired reset token')`,
-      ['PASSWORD_RESET_FAILED', ipAddress, userAgent]
-    );
+    try {
+      await this.database.query(
+        `INSERT INTO auth_events (
+          id, event_type, auth_method, ip_address, user_agent, result, failure_reason
+        ) VALUES (gen_random_uuid(), $1, 'PASSWORD', $2, $3, 'FAILED', 'Invalid or expired reset token')`,
+        ['PASSWORD_RESET_FAILED', ipAddress, userAgent]
+      );
+    } catch (error) {
+      console.warn('[PasswordResetService] recordFailedTokenValidation audit logging failed:', error);
+    }
   }
 
   /**
