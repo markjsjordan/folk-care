@@ -22,10 +22,10 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.2",
+    "@anthropic-ai/sdk": "^0.131.0",
     "@folkcare/core": "^0.1.0",
-    "date-fns": "^4.1.0",
-    "pg": "^8.13.1",
+    "date-fns": "^4.4.0",
+    "pg": "^8.23.1",
     "uuid": "^13.0.0",
     "zod": "^4.1.12"
   },

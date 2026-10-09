@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@folkcare/core": "^0.1.0",
-    "date-fns": "^4.1.0",
+    "date-fns": "^4.4.0",
     "uuid": "^13.0.0",
     "zod": "^4.1.12"
   },
