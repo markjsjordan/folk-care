@@ -71,12 +71,19 @@ function normalizePhoneDigits(value: string): string {
 }
 
 function toCreatePayload(values: CaregiverFormValues, organizationId: string): Record<string, unknown> {
-  const branchIds = parseBranchIds(values.branchIdsRaw);
+  const parsedBranchIds = parseBranchIds(values.branchIdsRaw);
+  const primaryBranchId = values.primaryBranchId.trim();
+  // Guarantee the submitted payload can never violate the DB's
+  // CHECK(primary_branch_id = ANY(branch_ids)) constraint: if the user
+  // didn't duplicate the primary branch into the branch list, do it for them.
+  const branchIds = primaryBranchId && !parsedBranchIds.includes(primaryBranchId)
+    ? [...parsedBranchIds, primaryBranchId]
+    : parsedBranchIds;
 
   return {
     organizationId,
     branchIds,
-    primaryBranchId: values.primaryBranchId.trim(),
+    primaryBranchId,
     firstName: values.firstName.trim(),
     middleName: values.middleName.trim() || undefined,
     lastName: values.lastName.trim(),

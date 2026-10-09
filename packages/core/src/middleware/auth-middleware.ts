@@ -521,4 +521,51 @@ export class AuthMiddleware {
 
     next();
   };
+
+  /**
+   * Audit impersonated actions
+   * Logs every mutating request (POST/PUT/PATCH/DELETE) made during an active
+   * impersonation session, attributing the action to both the real admin and
+   * the impersonated caregiver. Required for HIPAA compliance - every action
+   * taken while impersonating must be traceable to the acting administrator.
+   * Must be used after requireAuth middleware.
+   *
+   * Usage:
+   *   router.use(authMiddleware.requireAuth);
+   *   router.use(authMiddleware.auditImpersonatedActions);
+   */
+  auditImpersonatedActions = (req: Request, _res: Response, next: NextFunction): void => {
+    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+    if (req.user?.impersonation && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+      const imp = req.user.impersonation;
+      void this.auditService.logEvent(
+        {
+          userId: imp.adminUserId,
+          organizationId: req.user.organizationId,
+          roles: req.user.roles,
+          permissions: req.user.permissions,
+          branchIds: req.user.branchIds
+        },
+        {
+          eventType: 'SECURITY',
+          resource: req.path,
+          resourceId: req.user.userId,
+          action: 'IMPERSONATED_ACTION',
+          result: 'SUCCESS',
+          metadata: {
+            sessionId: imp.sessionId,
+            method: req.method,
+            path: req.path,
+            adminEmail: imp.adminEmail
+          },
+          ipAddress: req.ip ?? req.socket.remoteAddress,
+          userAgent: req.headers['user-agent']
+        }
+      ).catch((error: unknown) => {
+        console.error('Failed to log impersonated action:', error);
+      });
+    }
+
+    next();
+  };
 }

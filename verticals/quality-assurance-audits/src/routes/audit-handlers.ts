@@ -46,6 +46,8 @@ export function createAuditRoutes(auditService: AuditService, router: Router, db
     // All audit routes require authentication
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     router.use(authMiddleware.requireAuth as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    router.use(authMiddleware.auditImpersonatedActions as any);
   }
 
   // ============================================================================

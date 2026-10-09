@@ -35,6 +35,7 @@ export function createOptimalVisitFrequencyRoutes(db: Database): Router {
 
   // Require authentication for all routes
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   /**
    * POST /api/scheduling/optimal-frequency

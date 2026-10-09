@@ -36,6 +36,7 @@ export function createCaregiverRouter(db: Database): Router {
 
   // All routes require authentication
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   /**
    * GET /api/caregivers/me

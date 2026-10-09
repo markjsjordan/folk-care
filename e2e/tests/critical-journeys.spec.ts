@@ -114,7 +114,7 @@ test.describe('Critical User Journeys', () => {
   }) => {
     // ===== PHASE 1: Admin creates client =====
     const adminPage = await createAuthenticatedPage(page, adminUser);
-    await adminPage.goto('/clients/new');
+    await adminPage.goto('/clients/new/intake');
 
     // Fill client information
     await adminPage.getByLabel('First Name').fill('Emily');

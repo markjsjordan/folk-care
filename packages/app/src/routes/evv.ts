@@ -55,6 +55,7 @@ export function createEVVRouter(db: Database): Router {
 
   // All EVV routes require authentication
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   /**
    * GET /api/evv

@@ -1052,6 +1052,7 @@ export function createClientRouter(clientService: ClientService, db: Database): 
 
   // CRITICAL: All client routes require authentication (HIPAA compliance)
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   // Main CRUD endpoints
   // NOTE: Route registration order matters — Express matches in order, and any

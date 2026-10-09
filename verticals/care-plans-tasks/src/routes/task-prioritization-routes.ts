@@ -32,6 +32,7 @@ export function createTaskPrioritizationRoutes(db: Database): Router {
 
   // Require authentication for all routes
   router.use(authMiddleware.requireAuth);
+  router.use(authMiddleware.auditImpersonatedActions);
 
   // Initialize service (API key from environment)
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY || '';

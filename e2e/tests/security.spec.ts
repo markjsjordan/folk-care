@@ -303,7 +303,7 @@ test.describe('Security', () => {
   test('XSS Prevention: event handlers in attributes should be sanitized', async ({
     authenticatedPage,
   }) => {
-    await authenticatedPage.goto('/clients/new');
+    await authenticatedPage.goto('/clients/new/intake');
 
     const xssPayload = 'John" onload="alert(\'XSS\')"';
 

@@ -76,7 +76,7 @@ export const ClientList: React.FC = () => {
             </button>
           </div>
           {can('clients:write') && (
-            <Link to="/clients/new">
+            <Link to="/clients/new/intake">
               <Button leftIcon={<Plus className="h-4 w-4" />}>
                 New Client
               </Button>
@@ -137,7 +137,7 @@ export const ClientList: React.FC = () => {
                 variant="outline"
                 size="lg"
                 leftIcon={<Plus className="h-4 w-4" />}
-                onClick={() => navigate('/clients/new')}
+                onClick={() => navigate('/clients/new/intake')}
               >
                 Add Client
               </Button>

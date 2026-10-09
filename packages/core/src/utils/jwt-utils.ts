@@ -23,6 +23,12 @@ export interface TokenPayload {
   roles: string[];
   permissions: string[];
   tokenVersion: number; // For token invalidation
+  impersonation?: {
+    adminUserId: UUID;
+    adminEmail: string;
+    impersonatedAt: string;
+    reason?: string;
+  };
 }
 
 /**

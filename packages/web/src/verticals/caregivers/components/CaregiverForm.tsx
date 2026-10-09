@@ -350,7 +350,12 @@ export const CaregiverForm: React.FC<CaregiverFormProps> = ({
               placeholder="00000000-0000-0000-0000-000000000002"
             />
           </FormField>
-          <FormField label="Primary Branch ID" required error={errors.primaryBranchId}>
+          <FormField
+            label="Primary Branch ID"
+            required
+            error={errors.primaryBranchId}
+            helperText="Must be one of the Branch IDs listed above -- it will be added automatically if missing"
+          >
             <Input
               value={values.primaryBranchId}
               onChange={(e) => set('primaryBranchId', e.target.value)}
