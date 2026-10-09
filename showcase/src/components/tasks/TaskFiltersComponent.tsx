@@ -51,7 +51,6 @@ export const TaskFiltersComponent: React.FC<TaskFiltersProps> = ({
 
   const handleClearAll = () => {
     onFiltersChange({
-      query: filters.query,
       status: undefined,
     });
   };
