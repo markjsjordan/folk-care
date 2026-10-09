@@ -108,8 +108,10 @@ export const createVisitApiService = (apiClient: ApiClient): VisitApiService => 
     async getVisitsByFilters(filters: VisitSearchFilters): Promise<Visit[]> {
       // Use calendar endpoint to show all visits (not just caregiver's visits)
       // This allows coordinators and admins to see all organizational visits
-      const startDate = filters.dateFrom ?? new Date();
-      const endDate = filters.dateTo ?? new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days ahead
+      const startDate = filters.dateFrom ? new Date(filters.dateFrom) : new Date();
+      const endDate = filters.dateTo
+        ? new Date(filters.dateTo)
+        : new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days ahead
 
       return this.getCalendarVisits(startDate, endDate, filters.branchIds);
     },
