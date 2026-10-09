@@ -332,6 +332,71 @@ describe('FC-SCHED-001 Integration Test Suite', () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(1);
     });
+
+    it('should return visit details by ID via GET /api/visits/:id', async () => {
+      const mockVisit = {
+        id: VISIT_ID,
+        organizationId: ORG_ID,
+        branchId: BRANCH_ID,
+        clientId: CLIENT_ID,
+        status: 'SCHEDULED',
+        visitType: 'REGULAR',
+        scheduledDate: FIXED_NOW,
+        scheduledStartTime: '09:00:00',
+        scheduledEndTime: '11:00:00',
+      };
+      mockScheduleRepository.getVisitById.mockResolvedValueOnce(mockVisit);
+
+      const response = await request(app)
+        .get(`/api/visits/${VISIT_ID}`)
+        .set('Authorization', 'Bearer valid-token')
+        .set('X-Organization-Id', ORG_ID);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.id).toBe(VISIT_ID);
+      expect(response.body.data.visitType).toBe('REGULAR');
+    });
+
+    it('should return 400 for invalid visit UUID via GET /api/visits/:id', async () => {
+      const response = await request(app)
+        .get('/api/visits/not-a-valid-uuid')
+        .set('Authorization', 'Bearer valid-token')
+        .set('X-Organization-Id', ORG_ID);
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('Invalid visit ID format');
+    });
+
+    it('should return 404 when visit is not found via GET /api/visits/:id', async () => {
+      mockScheduleRepository.getVisitById.mockResolvedValueOnce(null);
+
+      const response = await request(app)
+        .get(`/api/visits/${VISIT_ID}`)
+        .set('Authorization', 'Bearer valid-token')
+        .set('X-Organization-Id', ORG_ID);
+
+      expect(response.status).toBe(404);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('Visit not found');
+    });
+
+    it('should return 403 when visit belongs to a different organization', async () => {
+      mockScheduleRepository.getVisitById.mockResolvedValueOnce({
+        id: VISIT_ID,
+        organizationId: 'different-org-id',
+      });
+
+      const response = await request(app)
+        .get(`/api/visits/${VISIT_ID}`)
+        .set('Authorization', 'Bearer valid-token')
+        .set('X-Organization-Id', ORG_ID);
+
+      expect(response.status).toBe(403);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('Access denied');
+    });
   });
 
   // ==========================================================================
