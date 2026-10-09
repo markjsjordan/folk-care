@@ -128,7 +128,13 @@ const CreateCaregiverSchema = z.object({
       'RETIRED',
     ] as const)
     .optional(),
-});
+}).refine(
+  (data) => data.branchIds.includes(data.primaryBranchId),
+  {
+    message: 'Primary Branch ID must be included in the Branch IDs list',
+    path: ['primaryBranchId'],
+  }
+);
 
 // Update caregiver schema
 const UpdateCaregiverSchema = z.object({
