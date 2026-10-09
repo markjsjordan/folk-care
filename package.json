@@ -133,7 +133,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.90.10",
     "express-rate-limit": "^8.2.1",
-    "js-yaml": "4.1.1",
+    "js-yaml": "5.4.3",
     "rate-limit-redis": "^4.3.0",
     "react-joyride": "^3.0.0-7",
     "react-native-reanimated": "~4.2.0",
@@ -153,7 +153,7 @@
     "@types/express": "^5.0.5",
     "express": "^5.2.1",
     "body-parser": "^2.2.1",
-    "js-yaml": "4.1.1",
+    "js-yaml": "5.4.3",
     "esbuild": "^0.25.0",
     "zod": "4.0.17"
   }
