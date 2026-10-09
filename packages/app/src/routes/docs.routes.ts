@@ -19,5 +19,8 @@ router.get('/api-docs', swaggerUi.setup(specs, {
 router.get('/openapi.json', (_req, res) => {
   res.json(specs);
 });
+router.get('/api-docs.json', (_req, res) => {
+  res.json(specs);
+});
 
 export default router;

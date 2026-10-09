@@ -121,8 +121,8 @@ export interface VisitSearchFilters {
   caregiverId?: string;
   status?: VisitStatus[];
   visitType?: VisitType[];
-  dateFrom?: Date;
-  dateTo?: Date;
+  dateFrom?: Date | string;
+  dateTo?: Date | string;
   isUnassigned?: boolean;
   isUrgent?: boolean;
 }
