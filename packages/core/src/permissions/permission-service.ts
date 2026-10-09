@@ -53,6 +53,7 @@ export class PermissionService {
         'admin:state-config',
         'admin:data-access',
         'admin:compliance',
+        'messages:*',
       ])
     );
 
@@ -67,6 +68,7 @@ export class PermissionService {
         'schedules:*',
         'reports:read',
         'compliance:read',
+        'messages:*',
       ])
     );
 
@@ -81,6 +83,7 @@ export class PermissionService {
         'visits:*',
         'care-plans:*',
         'compliance:read',
+        'messages:*',
       ])
     );
 
@@ -107,6 +110,9 @@ export class PermissionService {
         'tasks:update',
         'tasks:complete',
         'notes:create',
+        // Caregivers only see threads explicitly assigned to them (enforced in service)
+        'messages:view',
+        'messages:send',
       ])
     );
 

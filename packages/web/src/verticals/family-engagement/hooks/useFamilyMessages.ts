@@ -51,6 +51,7 @@ export function useSendMessage() {
       // Invalidate and refetch messages in this thread
       void queryClient.invalidateQueries({ queryKey: ['messages', variables.threadId] });
       void queryClient.invalidateQueries({ queryKey: ['messageThreads'] });
+      void queryClient.invalidateQueries({ queryKey: ['staffInbox'] });
       void queryClient.invalidateQueries({ queryKey: ['familyDashboard'] });
     },
     onError: (error: Error) => {
@@ -84,6 +85,43 @@ export function useCreateMessageThread() {
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to send message');
+    },
+  });
+}
+
+/**
+ * Hook to load the staff inbox of family conversations
+ */
+export function useStaffInbox(status?: 'OPEN' | 'CLOSED') {
+  const familyPortalApi = useFamilyPortalApi();
+
+  return useQuery({
+    queryKey: ['staffInbox', status ?? 'ALL'],
+    queryFn: () => familyPortalApi.getStaffInbox(status),
+    refetchInterval: 30000,
+  });
+}
+
+/**
+ * Hook to close/reopen a thread
+ */
+export function useUpdateMessageThread() {
+  const familyPortalApi = useFamilyPortalApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      threadId,
+      changes,
+    }: {
+      threadId: UUID;
+      changes: { status?: 'OPEN' | 'CLOSED'; assignedToUserId?: UUID | null };
+    }) => familyPortalApi.updateMessageThread(threadId, changes),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['staffInbox'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update conversation');
     },
   });
 }
