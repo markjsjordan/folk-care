@@ -69,7 +69,9 @@ const initRedis = async (): Promise<void> => {
 };
 
 // Initialize Redis on module load
-initRedis().catch(console.error);
+initRedis().catch((err) => {
+  console.warn('Top-level Redis rate-limiting initialization deferred/failed:', err);
+});
 
 // Helper function to get Redis store if available
 const getRedisStore = (prefix: string): RedisStore | undefined => {
