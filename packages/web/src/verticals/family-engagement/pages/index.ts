@@ -6,3 +6,4 @@ export * from './FamilySettings';
 export * from './SchedulePage';
 export * from './CarePlanPage';
 export * from './HealthUpdatesPage';
+export * from './StaffMessagesPage';

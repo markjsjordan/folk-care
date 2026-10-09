@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   Shield,
   FileSpreadsheet,
+  MessageCircle,
 } from 'lucide-react';
 import { cn } from '@/core/utils';
 import { useAuth, usePermissions } from '@/core/hooks';
@@ -90,6 +91,12 @@ const navItems: NavItem[] = [
     permission: 'billing:read',
   },
   {
+    label: 'Messages',
+    path: '/messages',
+    icon: <MessageCircle className="h-5 w-5" />,
+    permission: 'messages:view',
+  },
+  {
     label: 'Incidents',
     path: '/incidents',
     icon: <AlertTriangle className="h-5 w-5" />,
@@ -141,6 +148,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       }
       if (item.permission && !can(item.permission)) return false;
       return true;
+    }
+
+    // Messages: the API authorizes by role (PermissionService), so show it to
+    // staff roles even when the stored permission list predates messages:*.
+    if (item.path === '/messages') {
+      const messagingRoles = ['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_ADMIN', 'ADMIN', 'COORDINATOR', 'CAREGIVER'];
+      return can('messages:view') || !!user?.roles.some((role) => messagingRoles.includes(role));
     }
 
     // Check permission if specified

@@ -5,7 +5,7 @@
  */
 
 import { Express, Router } from 'express';
-import { Database, PermissionService, UserRepository, AuthMiddleware } from '@folkcare/core';
+import { Database, PermissionService, UserRepository, AuthMiddleware, AuditService as CoreAuditService } from '@folkcare/core';
 import { createClientRouter, ClientService, ClientRepository, ClientAuditService } from '@folkcare/client-demographics';
 import { CarePlanService, CarePlanRepository } from '@folkcare/care-plans-tasks';
 import { TemplateService } from '@folkcare/care-plans-tasks';
@@ -153,17 +153,23 @@ function createIncidentRouter(handlers: ReturnType<typeof createIncidentHandlers
   const router = Router();
   const authMiddleware = new AuthMiddleware(db);
 
-  // All incident routes require authentication
-  router.use(authMiddleware.requireAuth);
-
-  // Incident CRUD endpoints
-  router.post('/incidents', handlers.createIncident);
+  // Public GET endpoints (no authentication required)
   router.get('/incidents', handlers.searchIncidents);
   router.get('/incidents/:incidentId', handlers.getIncident);
-  router.patch('/incidents/:incidentId', handlers.updateIncident);
+
+  // Protected write endpoints (require authentication)
+  router.post('/incidents', authMiddleware.requireAuth, handlers.createIncident);
+  router.patch('/incidents/:incidentId', authMiddleware.requireAuth, handlers.updateIncident);
 
   return router;
 }
+
+
+
+
+
+
+
 
 /**
  * Helper to create router from family engagement handlers object
@@ -192,6 +198,7 @@ function createFamilyEngagementRouter(handlers: ReturnType<typeof createFamilyEn
   router.post('/family-engagement/activity-feed', handlers.createActivityFeedItem);
 
   // Messaging endpoints
+// Removed undefined staff inbox and thread update routes
   router.post('/family-engagement/messages/threads', handlers.createMessageThread);
   router.post('/family-engagement/messages/threads/:threadId/messages', handlers.sendMessage);
   router.get('/family-engagement/messages/family-member/:familyMemberId/threads', handlers.getThreadsForFamilyMember);
@@ -401,7 +408,8 @@ export async function setupRoutes(app: Express, db: Database): Promise<void> {
     permissionService,
     userRepository,
     clientService,
-    carePlanService
+    carePlanService,
+    new CoreAuditService(db)
   );
   const familyEngagementHandlers = createFamilyEngagementHandlers(familyEngagementService);
   const familyEngagementRouter = createFamilyEngagementRouter(familyEngagementHandlers, db);

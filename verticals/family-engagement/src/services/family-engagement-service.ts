@@ -15,6 +15,7 @@ import type {
   IUserRepository
 } from '@folkcare/core';
 import { PermissionService, getNotificationService } from '@folkcare/core';
+import type { AuditService } from '@folkcare/core';
 import type { NotificationChannel } from '@folkcare/core';
 import type {
   FamilyMember,
@@ -28,6 +29,8 @@ import type {
   SendNotificationInput,
   CreateMessageThreadInput,
   SendMessageInput,
+  StaffMessageThread,
+  UpdateMessageThreadInput,
   FamilyDashboard,
   CareTeamMember
 } from '../types/family-engagement';
@@ -52,7 +55,8 @@ export class FamilyEngagementService {
     private permissions: PermissionService,
     private userRepository: IUserRepository,
     private clientService: ClientService,
-    private carePlanService: CarePlanService
+    private carePlanService: CarePlanService,
+    private auditService?: AuditService
   ) {}
 
   // ============================================================================
@@ -439,11 +443,8 @@ export class FamilyEngagementService {
       throw new Error('Insufficient permissions to send messages') as PermissionError;
     }
 
-    // Get thread to validate access and get clientId, familyMemberId
-    const thread = await this.messageRepo.getThreadById(input.threadId);
-    if (!thread) {
-      throw new Error('Message thread not found') as NotFoundError;
-    }
+    // Get thread to validate access (tenant + staff scope) and get clientId, familyMemberId
+    const thread = await this.assertThreadAccess(input.threadId, context);
 
     const senderName = await this.getUserName(context.userId);
     const message = await this.messageRepo.sendMessage({
@@ -491,6 +492,16 @@ export class FamilyEngagementService {
       throw new Error('Insufficient permissions to view message threads') as PermissionError;
     }
 
+    // Security check: family user can only view their own threads unless staff
+    if (!this.isStaffContext(context)) {
+      if (familyMemberId !== context.userId) {
+        const familyMember = await this.familyMemberRepo.findById(familyMemberId);
+        if (!familyMember || (familyMember.userId && familyMember.userId !== context.userId)) {
+          throw new Error('Insufficient permissions to view message threads') as PermissionError;
+        }
+      }
+    }
+
     return await this.messageRepo.getThreadsForFamilyMember(familyMemberId);
   }
 
@@ -506,7 +517,133 @@ export class FamilyEngagementService {
       throw new Error('Insufficient permissions to view messages') as PermissionError;
     }
 
-    return await this.messageRepo.getMessagesInThread(threadId);
+    const thread = await this.assertThreadAccess(threadId, context);
+    const isStaff = this.isStaffContext(context);
+
+    // Internal staff notes are never returned to family members
+    const messages = await this.messageRepo.getMessagesInThread(threadId, isStaff);
+
+    if (isStaff) {
+      await this.messageRepo.markThreadReadByStaff(threadId, context.userId);
+      await this.auditThreadAccess(context, thread.id, 'READ', { messageCount: messages.length });
+    }
+
+    return messages;
+  }
+
+  // ----------------------------------------------------------------------------
+  // Staff inbox (admins, coordinators, assigned caregivers)
+  // ----------------------------------------------------------------------------
+
+  private isStaffContext(context: UserContext): boolean {
+    return !context.roles.some((role) => role === 'FAMILY' || role === 'CLIENT');
+  }
+
+  /**
+   * HIPAA minimum necessary: org-level admins see all org threads, branch-level
+   * roles see their branches, everyone else (caregivers) only threads assigned to them.
+   */
+  private resolveStaffScope(
+    context: UserContext
+  ): { branchIds?: UUID[]; assignedToUserId?: UUID } {
+    const roles = context.roles as string[];
+    if (roles.some((r) => ['SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN'].includes(r))) {
+      return {};
+    }
+    if (roles.some((r) => ['BRANCH_ADMIN', 'COORDINATOR'].includes(r))) {
+      return { branchIds: context.branchIds ?? [] };
+    }
+    return { assignedToUserId: context.userId };
+  }
+
+  private async assertThreadAccess(threadId: UUID, context: UserContext): Promise<MessageThread> {
+    if (!context.organizationId) {
+      throw new Error('Message thread not found') as NotFoundError;
+    }
+    const thread = await this.messageRepo.getThreadByIdForOrganization(
+      threadId,
+      context.organizationId
+    );
+    // Same error for missing and out-of-scope threads: don't leak existence.
+    if (!thread) {
+      throw new Error('Message thread not found') as NotFoundError;
+    }
+    if (this.isStaffContext(context)) {
+      const scope = this.resolveStaffScope(context);
+      const branchOk = !scope.branchIds || scope.branchIds.includes(thread.branchId);
+      const assignedOk = !scope.assignedToUserId || thread.assignedToUserId === scope.assignedToUserId;
+      if (!branchOk || !assignedOk) {
+        throw new Error('Message thread not found') as NotFoundError;
+      }
+    } else {
+      // Family context: user ID must match familyMemberId (or family member's user record)
+      if (thread.familyMemberId !== context.userId) {
+        // Also check if family member record has user_id matching context.userId
+        const familyMember = await this.familyMemberRepo.findById(thread.familyMemberId);
+        if (!familyMember || (familyMember.userId && familyMember.userId !== context.userId)) {
+          throw new Error('Message thread not found') as NotFoundError;
+        }
+      }
+    }
+    return thread;
+  }
+
+  private async auditThreadAccess(
+    context: UserContext,
+    threadId: UUID,
+    action: 'READ' | 'SEARCH',
+    metadata?: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      await this.auditService?.logDataAccess(context, 'message_thread', threadId, action, metadata);
+    } catch (error) {
+      // Audit failures must be visible but must not block care communication.
+      console.error('Failed to write message audit event:', error);
+    }
+  }
+
+  /**
+   * List the staff inbox for the current user.
+   */
+  async getStaffInbox(
+    context: UserContext,
+    status?: 'OPEN' | 'CLOSED'
+  ): Promise<StaffMessageThread[]> {
+    if (!this.permissions.hasPermission(context, 'messages:view') || !this.isStaffContext(context)) {
+      throw new Error('Insufficient permissions to view message threads') as PermissionError;
+    }
+    if (!context.organizationId) {
+      throw new Error('Insufficient permissions: no organization context') as PermissionError;
+    }
+    const threads = await this.messageRepo.getStaffInbox(
+      context.organizationId,
+      this.resolveStaffScope(context),
+      status
+    );
+    await this.auditThreadAccess(context, context.organizationId, 'SEARCH', {
+      scope: 'staff-inbox',
+      resultCount: threads.length,
+    });
+    return threads;
+  }
+
+  /**
+   * Triage a thread: close/reopen or (re)assign it.
+   */
+  async updateThread(
+    threadId: UUID,
+    changes: UpdateMessageThreadInput,
+    context: UserContext
+  ): Promise<MessageThread> {
+    if (!this.permissions.hasPermission(context, 'messages:create') || !this.isStaffContext(context)) {
+      throw new Error('Insufficient permissions to manage message threads') as PermissionError;
+    }
+    await this.assertThreadAccess(threadId, context);
+    const updated = await this.messageRepo.updateThread(threadId, context.userId, changes);
+    if (!updated) {
+      throw new Error('Message thread not found') as NotFoundError;
+    }
+    return updated;
   }
 
   // ============================================================================

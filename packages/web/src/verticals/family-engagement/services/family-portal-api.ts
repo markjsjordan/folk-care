@@ -14,6 +14,7 @@ import type {
   MessageThread,
   Message,
   NotificationPreferences,
+  StaffMessageThread,
 } from '@folkcare/family-engagement';
 
 const BASE_URL = '/api/family-engagement';
@@ -36,6 +37,11 @@ export interface FamilyPortalApiService {
     clientId: UUID,
     subject: string,
     initialMessage: string
+  ): Promise<MessageThread>;
+  getStaffInbox(status?: 'OPEN' | 'CLOSED'): Promise<StaffMessageThread[]>;
+  updateMessageThread(
+    threadId: UUID,
+    changes: { status?: 'OPEN' | 'CLOSED'; assignedToUserId?: UUID | null }
   ): Promise<MessageThread>;
 }
 
@@ -135,6 +141,24 @@ export const createFamilyPortalApiService = (apiClient: ApiClient): FamilyPortal
         initialMessage,
         priority: 'NORMAL',
       });
+    },
+
+    /**
+     * Staff inbox of family conversations (scope enforced server-side)
+     */
+    async getStaffInbox(status?: 'OPEN' | 'CLOSED'): Promise<StaffMessageThread[]> {
+      const query = status ? `?status=${status}` : '';
+      return apiClient.get<StaffMessageThread[]>(`${BASE_URL}/messages/inbox${query}`);
+    },
+
+    /**
+     * Close/reopen or assign a thread
+     */
+    async updateMessageThread(
+      threadId: UUID,
+      changes: { status?: 'OPEN' | 'CLOSED'; assignedToUserId?: UUID | null }
+    ): Promise<MessageThread> {
+      return apiClient.patch<MessageThread>(`${BASE_URL}/messages/threads/${threadId}`, changes);
     },
   };
 };
