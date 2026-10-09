@@ -53,10 +53,12 @@ export const createClientApiService = (apiClient: ApiClient): ClientApiService =
       if (filters?.sortDirection) params.append('sortDirection', filters.sortDirection);
 
       const queryString = params.toString();
-      const response = await apiClient.get<{ success: boolean; data: PaginatedResult<Client> }>(
+      const response = await apiClient.get<{ success?: boolean; data?: PaginatedResult<Client> } | PaginatedResult<Client>>(
         `/api/clients${queryString ? `?${queryString}` : ''}`
       );
-      return response.data;
+      return (response && typeof response === 'object' && 'data' in response && response.data)
+        ? response.data
+        : (response as PaginatedResult<Client>);
     },
 
     async getClientsDashboard(filters?: ClientSearchFilters & SearchParams): Promise<PaginatedResult<DashboardClient>> {
@@ -69,22 +71,33 @@ export const createClientApiService = (apiClient: ApiClient): ClientApiService =
       if (filters?.pageSize) params.append('limit', filters.pageSize.toString());
 
       const queryString = params.toString();
-      const response = await apiClient.get<{ success: boolean; data: PaginatedResult<DashboardClient> }>(
+      const response = await apiClient.get<{ success?: boolean; data?: PaginatedResult<DashboardClient> } | PaginatedResult<DashboardClient>>(
         `/api/clients/dashboard${queryString ? `?${queryString}` : ''}`
       );
-      return response.data;
+      return (response && typeof response === 'object' && 'data' in response && response.data)
+        ? response.data
+        : (response as PaginatedResult<DashboardClient>);
     },
 
     async getClientById(id: string): Promise<Client> {
-      return apiClient.get<Client>(`/api/clients/${id}`);
+      const response = await apiClient.get<{ success?: boolean; data?: Client } | Client>(`/api/clients/${id}`);
+      return (response && typeof response === 'object' && 'data' in response && response.data)
+        ? response.data
+        : (response as Client);
     },
 
     async createClient(input: CreateClientInput): Promise<Client> {
-      return apiClient.post<Client>('/api/clients', input);
+      const response = await apiClient.post<{ success?: boolean; data?: Client } | Client>('/api/clients', input);
+      return (response && typeof response === 'object' && 'data' in response && response.data)
+        ? response.data
+        : (response as Client);
     },
 
     async updateClient(id: string, input: UpdateClientInput): Promise<Client> {
-      return apiClient.patch<Client>(`/api/clients/${id}`, input);
+      const response = await apiClient.patch<{ success?: boolean; data?: Client } | Client>(`/api/clients/${id}`, input);
+      return (response && typeof response === 'object' && 'data' in response && response.data)
+        ? response.data
+        : (response as Client);
     },
 
     async deleteClient(id: string): Promise<void> {
