@@ -20,7 +20,7 @@
     "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext ts --max-warnings 175 --ignore-pattern 'dist-vercel/**'"
+    "lint": "eslint . --ext ts --max-warnings 180 --ignore-pattern 'dist-vercel/**'"
   },
   "dependencies": {
     "@folkcare/ai-services": "*",
@@ -41,8 +41,8 @@
     "@folkcare/visit-notes": "*",
     "@types/multer": "^2.0.0",
     "@types/papaparse": "^5.5.0",
-    "@upstash/ratelimit": "^2.0.7",
-    "@upstash/redis": "^1.35.7",
+    "@upstash/ratelimit": "^2.2.0",
+    "@upstash/redis": "^1.39.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

@@ -42,7 +42,9 @@ export function createShiftMatchingRouter(db: Database): Router {
 
   // All shift-matching routes require authentication
   router.use(authMiddleware.requireAuth);
-  router.use(authMiddleware.auditImpersonatedActions);
+  if (authMiddleware.auditImpersonatedActions) {
+    router.use((req, res, next) => authMiddleware.auditImpersonatedActions(req, res, next));
+  }
 
   /**
    * GET /api/shift-matching/open-shifts
